@@ -1,4 +1,9 @@
-# Electoral Analytics and Predictive Intelligence Platform
+# Electoral Analytics Platform
+
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-red.svg)](https://streamlit.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AKInfinitiX/electoral-analytics-platform/blob/main/Final_git_ready.ipynb)
 
 An analytical application developed with Streamlit for political strategists and data analysts. The platform provides capabilities for parsing voter rolls, examining multi-year electoral trends, visualizing demographic distributions across age, gender, locality, and community categories, and executing probabilistic victory simulations utilizing statistical modeling.
 
