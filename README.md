@@ -178,6 +178,7 @@ Contributions, feature requests, and issue reports are welcome. Fork the reposit
 
 ## Author & Acknowledgments
 **Made by:** (Akshat Raj Patel) AKInfinitiX
+
 **Institution:** Indian Institute of Technology (BHU), Varanasi
 
 ## License
