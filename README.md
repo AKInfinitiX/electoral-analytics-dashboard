@@ -45,7 +45,7 @@ To deploy and execute this application locally, follow these steps:
 **Clone the repository:**
 
 ```bash
-git clone https://github.com/AKInfinitiX/electoral-analytics-platform.git
+git clone https://github.com/AKInfinitiX/electoral-analytics-dashboard.git
 cd electoral-analytics-platform
 ```
 
