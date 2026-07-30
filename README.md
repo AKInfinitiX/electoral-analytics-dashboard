@@ -89,8 +89,8 @@ Copy and paste the following blocks into **separate code cells** in your Colab n
 **Cell 1 — Clone the repository and install dependencies**
 
 ```python
-!git clone https://github.com/AKInfinitiX/electoral-analytics-platform.git
-%cd electoral-analytics-platform
+!git clone https://github.com/AKInfinitiX/electoral-analytics-dashboard.git
+%cd electoral-analytics-dashboard
 ```
 
 > **Note:** If your constituency CSV files are private and not included in the public GitHub repository, manually upload them via the Colab file sidebar after running this cell.
