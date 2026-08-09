@@ -132,7 +132,7 @@ subprocess.Popen([
 time.sleep(5)
 print("Starting tunnel below...\n")
 !npx -y localtunnel --port 8501
-
+```
 **Step 3: Access Your App**
 
 1. Run **Cell 1** first, and wait for it to finish.
