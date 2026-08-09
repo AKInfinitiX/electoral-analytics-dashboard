@@ -86,29 +86,31 @@ This guide walks you through running the Streamlit electoral dashboard directly 
 
 Copy and paste the following blocks into **separate code cells** in your Colab notebook.
 
-**Cell 1 — Clone the repository and install dependencies**
+**Cell 1 — Clone the repository, install dependencies and uplaod files**
 
 ```python
+# 1. Download the dashboard folder
 !git clone https://github.com/AKInfinitiX/electoral-analytics-dashboard.git
-%cd electoral-analytics-dashboard
-```
 
-> **Note:** If your constituency CSV files are private and not included in the public GitHub repository, manually upload them via the Colab file sidebar after running this cell.
+# 2. Enter the correct folder
+%cd /content/electoral-analytics-dashboard
 
-**Cell 2 — Run Streamlit and launch LocalTunnel**
+# 3. UPLOAD YOUR DATA (This creates the upload button!)
+from google.colab import files
+print("\n CLICK 'CHOOSE FILES' TO UPLOAD YOUR CSV DATA ")
+uploaded = files.upload()
 
-```python
-!pip install -q streamlit==1.28.0 pandas matplotlib seaborn
-
+# 4. Import tools and install dependencies
 import urllib.request
 import time
 import subprocess
+!pip install -q streamlit==1.28.0 pandas matplotlib seaborn
 
-# Clean up any stuck background processes
+# 5. Clean up any old or stuck processes
 !pkill -f streamlit
 !pkill -f localtunnel
 
-# Print your Colab public IP (Localtunnel password)
+# 6. Get and print the Localtunnel password
 try:
     ip = urllib.request.urlopen('https://ipv4.icanhazip.com').read().decode('utf8').strip()
     print("-------------------------------------------------------------------")
@@ -117,7 +119,7 @@ try:
 except Exception:
     pass
 
-# Start Streamlit in the background
+# 7. Launch Streamlit in the background
 subprocess.Popen([
     "streamlit", "run", "app.py",
     "--server.port", "8501",
@@ -126,23 +128,22 @@ subprocess.Popen([
     "--server.enableXsrfProtection", "false"
 ])
 
+# 8. Create the public link
 time.sleep(5)
 print("Starting tunnel below...\n")
 !npx -y localtunnel --port 8501
-```
 
 **Step 3: Access Your App**
 
 1. Run **Cell 1** first, and wait for it to finish.
-2. Run **Cell 2**. It will output a line similar to:
 
    ```
    your url is: https://icy-wombat-33.loca.lt
    ```
 
    along with a `PASSWORD IS: <your-ip-address>` line above it.
-3. Click the generated `loca.lt` link.
-4. If LocalTunnel prompts for a password, copy the IP address printed by the script (`PASSWORD IS: ...`), paste it into the password box, and click **Submit**.
+4. Click the generated `loca.lt` link.
+5. If LocalTunnel prompts for a password, copy the IP address printed by the script (`PASSWORD IS: ...`), paste it into the password box, and click **Submit**.
 
 Your Streamlit electoral dashboard will now load in your browser tab.
 
