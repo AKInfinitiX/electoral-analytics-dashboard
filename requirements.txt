@@ -1,5 +1,6 @@
-streamlit==1.28.0
+streamlit
 pandas
 numpy
-matplotlib
-seaborn
+scikit-learn
+altair
+plotly
