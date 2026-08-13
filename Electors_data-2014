@@ -1,0 +1,77 @@
+import pandas as pd
+import numpy as np
+import time
+from google.colab import files
+
+# --- 1. Dataset Scale & Parameters (2014 ECI Electorate Baseline) ---
+TOTAL_RECORDS = 1720000  # ~1.72 Million Registered Voters for Varanasi in 2014
+
+print(f"Starting generation of {TOTAL_RECORDS:,} synthetic voter records for 2014...")
+start_time = time.time()
+
+# --- 2. Varanasi ECI & Government Census Demographics for 2014 ---
+# Gender Ratio (~55% Male, ~45% Female reflecting 2014 baseline rolls)
+genders = ['Male', 'Female']
+gender_probs = [0.55, 0.45]
+
+# Urban vs Rural Split (~58% Rural, ~42% Urban)
+areas = ['Rural', 'Urban']
+area_probs = [0.58, 0.42]
+
+# Assembly Segments distribution across Varanasi Constituency
+assemblies = ['Rohaniya', 'Varanasi North', 'Varanasi South', 'Varanasi Cantt', 'Sevapuri']
+assembly_probs = [0.22, 0.22, 0.16, 0.21, 0.19]
+
+# Community / Caste Proxies (Aligned with 2014 District Census Archives)
+communities = ['General_Hindu', 'OBC_Hindu', 'SC_Hindu', 'Muslim', 'Other']
+community_probs = [0.35, 0.35, 0.11, 0.18, 0.01]
+
+# Surnames mapped to Communities for realism
+surnames_gen = ['Sharma', 'Singh', 'Pandey', 'Mishra', 'Tiwari', 'Srivastava', 'Joshi']
+surnames_obc = ['Yadav', 'Patel', 'Maurya', 'Kushwaha', 'Rajbhar', 'Chaurasia', 'Verma']
+surnames_sc = ['Ram', 'Gautam', 'Sonkar', 'Paswan', 'Saroj', 'Kumar']
+surnames_muslim = ['Ansari', 'Khan', 'Ali', 'Ahmed', 'Qureshi', 'Siddiqui']
+
+# --- 3. Fast Vectorized Generation (NumPy) ---
+np.random.seed(2014)  # Ensures reproducible results for 2014
+
+voter_ids = [f"UP14{str(i).zfill(7)}" for i in range(1, TOTAL_RECORDS + 1)]
+ages = np.random.randint(18, 85, size=TOTAL_RECORDS)
+gender_arr = np.random.choice(genders, p=gender_probs, size=TOTAL_RECORDS)
+area_arr = np.random.choice(areas, p=area_probs, size=TOTAL_RECORDS)
+assembly_arr = np.random.choice(assemblies, p=assembly_probs, size=TOTAL_RECORDS)
+community_arr = np.random.choice(communities, p=community_probs, size=TOTAL_RECORDS)
+booth_arr = np.random.randint(1, 1721, size=TOTAL_RECORDS) # ~1,720 Polling Booths in 2014
+
+# Assign Surnames dynamically based on community
+def assign_surname(comm):
+    if comm == 'General_Hindu': return np.random.choice(surnames_gen)
+    elif comm == 'OBC_Hindu': return np.random.choice(surnames_obc)
+    elif comm == 'SC_Hindu': return np.random.choice(surnames_sc)
+    elif comm == 'Muslim': return np.random.choice(surnames_muslim)
+    else: return 'Kumar'
+
+surnames_arr = np.vectorize(assign_surname)(community_arr)
+
+# Build DataFrame with 2014 context tag
+df = pd.DataFrame({
+    'Voter_ID': voter_ids,
+    'Surname': surnames_arr,
+    'Age': ages.astype('int8'),
+    'Gender': gender_arr,
+    'Community': community_arr,
+    'Area_Type': area_arr,
+    'Assembly_Segment': assembly_arr,
+    'Polling_Booth_No': booth_arr,
+    'Election_Year': 2014
+})
+
+# --- 4. Save and Download CSV ---
+output_filename = "varanasi_voters_2014.csv"
+df.to_csv(output_filename, index=False)
+
+elapsed_time = time.time() - start_time
+print(f"Success! {output_filename} generated in {elapsed_time:.2f} seconds.")
+print(f"File Size: ~{round(df.memory_usage(deep=True).sum() / (1024 * 1024), 2)} MB in RAM")
+
+files.download(output_filename)
