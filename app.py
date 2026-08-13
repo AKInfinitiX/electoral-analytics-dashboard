@@ -1,409 +1,231 @@
+%%writefile app.py
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
-import os
-import re
-import math
+import altair as alt
+import plotly.express as px
+from sklearn.linear_model import Ridge
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, mean_absolute_percentage_error
 
-st.set_page_config(page_title="Electoral Analytics & Predictive Intelligence Platform", layout="wide")
-
-st.title("Electoral Analytics & Predictive Intelligence Platform")
-st.caption("Strategic Demographics, Spatial Intelligence, and Probabilistic Victory Modeling")
-
-sns.set_theme(style="whitegrid")
-
-def normal_cdf(x, mean, std):
-    if std <= 0:
-        return 1.0 if x >= mean else 0.0
-    return 0.5 * (1.0 + math.erf((x - mean) / (std * math.sqrt(2))))
+st.set_page_config(page_title="Electoral Intelligence Portal", layout="wide", initial_sidebar_state="expanded")
+st.markdown("### Electoral Intelligence Portal")
+st.sidebar.header("Parameters")
 
 @st.cache_data
-def load_electoral_data():
-    csv_files = [f for f in os.listdir('.') if f.endswith('.csv')]
-    dfs = []
+def load_default_data():
+    records = [
+        # --- 2024 Election Cycle ---
+        {'Year': 2024, 'Segment': 'Rohaniya', 'Party': 'BJP', 'Electors': 430500, 'Votes_Secured': 127508, 'Campaign_Spend_Lakhs': 85, 'Rally_Count': 12, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.5, 'Female_Turnout': 55.4, 'Booth_Count': 432},
+        {'Year': 2024, 'Segment': 'Rohaniya', 'Party': 'INC', 'Electors': 430500, 'Votes_Secured': 101225, 'Campaign_Spend_Lakhs': 55, 'Rally_Count': 8, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.5, 'Female_Turnout': 55.4, 'Booth_Count': 432},
+        {'Year': 2024, 'Segment': 'Rohaniya', 'Party': 'BSP', 'Electors': 430500, 'Votes_Secured': 10527, 'Campaign_Spend_Lakhs': 15, 'Rally_Count': 2, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.5, 'Female_Turnout': 55.4, 'Booth_Count': 432},
 
-    for f in csv_files:
-        try:
-            t = pd.read_csv(f, dtype=str, engine='python', on_bad_lines='skip', encoding='utf-8-sig')
-            t.columns = t.columns.str.strip().str.upper().str.replace(r'[^A-Z0-9]', '', regex=True)
+        {'Year': 2024, 'Segment': 'Varanasi North', 'Party': 'BJP', 'Electors': 442100, 'Votes_Secured': 131241, 'Campaign_Spend_Lakhs': 90, 'Rally_Count': 15, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 55.2, 'Female_Turnout': 53.1, 'Booth_Count': 445},
+        {'Year': 2024, 'Segment': 'Varanasi North', 'Party': 'INC', 'Electors': 442100, 'Votes_Secured': 101731, 'Campaign_Spend_Lakhs': 60, 'Rally_Count': 10, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 55.2, 'Female_Turnout': 53.1, 'Booth_Count': 445},
+        {'Year': 2024, 'Segment': 'Varanasi North', 'Party': 'BSP', 'Electors': 442100, 'Votes_Secured': 4173, 'Campaign_Spend_Lakhs': 12, 'Rally_Count': 1, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 55.2, 'Female_Turnout': 53.1, 'Booth_Count': 445},
 
-            years_found = re.findall(r'\d{4}', f)
-            if years_found:
-                t['YEAR'] = years_found[0]
-            elif 'YEAR' in t.columns:
-                t['YEAR'] = t['YEAR'].astype(str).str.strip()
-            else:
-                t['YEAR'] = 'Current'
+        {'Year': 2024, 'Segment': 'Varanasi South', 'Party': 'BJP', 'Electors': 355000, 'Votes_Secured': 97878, 'Campaign_Spend_Lakhs': 70, 'Rally_Count': 10, 'OBC_Share': 21.0, 'SC_Share': 12.0, 'Muslim_Share': 22.0, 'General_Share': 41.0, 'Male_Turnout': 52.1, 'Female_Turnout': 50.4, 'Booth_Count': 358},
+        {'Year': 2024, 'Segment': 'Varanasi South', 'Party': 'INC', 'Electors': 355000, 'Votes_Secured': 81732, 'Campaign_Spend_Lakhs': 50, 'Rally_Count': 7, 'OBC_Share': 21.0, 'SC_Share': 12.0, 'Muslim_Share': 22.0, 'General_Share': 41.0, 'Male_Turnout': 52.1, 'Female_Turnout': 50.4, 'Booth_Count': 358},
+        {'Year': 2024, 'Segment': 'Varanasi South', 'Party': 'BSP', 'Electors': 355000, 'Votes_Secured': 1032, 'Campaign_Spend_Lakhs': 5, 'Rally_Count': 0, 'OBC_Share': 21.0, 'SC_Share': 12.0, 'Muslim_Share': 22.0, 'General_Share': 41.0, 'Male_Turnout': 52.1, 'Female_Turnout': 50.4, 'Booth_Count': 358},
 
-            dfs.append(t)
-        except Exception:
-            continue
+        {'Year': 2024, 'Segment': 'Varanasi Cantt.', 'Party': 'BJP', 'Electors': 440200, 'Votes_Secured': 145922, 'Campaign_Spend_Lakhs': 95, 'Rally_Count': 14, 'OBC_Share': 26.0, 'SC_Share': 14.0, 'Muslim_Share': 17.0, 'General_Share': 39.0, 'Male_Turnout': 55.8, 'Female_Turnout': 53.0, 'Booth_Count': 441},
+        {'Year': 2024, 'Segment': 'Varanasi Cantt.', 'Party': 'INC', 'Electors': 440200, 'Votes_Secured': 95000, 'Campaign_Spend_Lakhs': 65, 'Rally_Count': 9, 'OBC_Share': 26.0, 'SC_Share': 14.0, 'Muslim_Share': 17.0, 'General_Share': 39.0, 'Male_Turnout': 55.8, 'Female_Turnout': 53.0, 'Booth_Count': 441},
+        {'Year': 2024, 'Segment': 'Varanasi Cantt.', 'Party': 'BSP', 'Electors': 440200, 'Votes_Secured': 8500, 'Campaign_Spend_Lakhs': 10, 'Rally_Count': 1, 'OBC_Share': 26.0, 'SC_Share': 14.0, 'Muslim_Share': 17.0, 'General_Share': 39.0, 'Male_Turnout': 55.8, 'Female_Turnout': 53.0, 'Booth_Count': 441},
 
-    if not dfs:
-        return None
+        {'Year': 2024, 'Segment': 'Sevapuri', 'Party': 'BJP', 'Electors': 361500, 'Votes_Secured': 108890, 'Campaign_Spend_Lakhs': 75, 'Rally_Count': 11, 'OBC_Share': 42.0, 'SC_Share': 22.0, 'Muslim_Share': 10.0, 'General_Share': 21.0, 'Male_Turnout': 61.2, 'Female_Turnout': 58.9, 'Booth_Count': 365},
+        {'Year': 2024, 'Segment': 'Sevapuri', 'Party': 'INC', 'Electors': 361500, 'Votes_Secured': 80000, 'Campaign_Spend_Lakhs': 55, 'Rally_Count': 8, 'OBC_Share': 42.0, 'SC_Share': 22.0, 'Muslim_Share': 10.0, 'General_Share': 21.0, 'Male_Turnout': 61.2, 'Female_Turnout': 58.9, 'Booth_Count': 365},
+        {'Year': 2024, 'Segment': 'Sevapuri', 'Party': 'BSP', 'Electors': 361500, 'Votes_Secured': 9500, 'Campaign_Spend_Lakhs': 15, 'Rally_Count': 2, 'OBC_Share': 42.0, 'SC_Share': 22.0, 'Muslim_Share': 10.0, 'General_Share': 21.0, 'Male_Turnout': 61.2, 'Female_Turnout': 58.9, 'Booth_Count': 365},
 
-    df = pd.concat(dfs, ignore_index=True)
-    df['VOTER_COUNT'] = 1
+        # --- 2019 Election Cycle ---
+        {'Year': 2019, 'Segment': 'Rohaniya', 'Party': 'BJP', 'Electors': 405200, 'Votes_Secured': 135400, 'Campaign_Spend_Lakhs': 80, 'Rally_Count': 10, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.0, 'Female_Turnout': 54.0, 'Booth_Count': 408},
+        {'Year': 2019, 'Segment': 'Rohaniya', 'Party': 'INC', 'Electors': 405200, 'Votes_Secured': 50000, 'Campaign_Spend_Lakhs': 40, 'Rally_Count': 5, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.0, 'Female_Turnout': 54.0, 'Booth_Count': 408},
+        {'Year': 2019, 'Segment': 'Rohaniya', 'Party': 'BSP', 'Electors': 405200, 'Votes_Secured': 60000, 'Campaign_Spend_Lakhs': 45, 'Rally_Count': 6, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.0, 'Female_Turnout': 54.0, 'Booth_Count': 408},
 
-    # Gender Standardization
-    gender_col = next((c for c in df.columns if 'GEN' in c or 'SEX' in c), None)
-    if gender_col:
-        df['GENDER_CLEAN'] = df[gender_col].astype(str).str.strip().str.upper().str[0]
-        df['GENDER_CLEAN'] = df['GENDER_CLEAN'].map({'M': 'Male', 'F': 'Female', 'T': 'Third Gender'}).fillna('Unknown')
-    else:
-        df['GENDER_CLEAN'] = 'Unknown'
+        {'Year': 2019, 'Segment': 'Varanasi North', 'Party': 'BJP', 'Electors': 415000, 'Votes_Secured': 141200, 'Campaign_Spend_Lakhs': 85, 'Rally_Count': 12, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 54.5, 'Female_Turnout': 51.5, 'Booth_Count': 419},
+        {'Year': 2019, 'Segment': 'Varanasi North', 'Party': 'INC', 'Electors': 415000, 'Votes_Secured': 65000, 'Campaign_Spend_Lakhs': 50, 'Rally_Count': 7, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 54.5, 'Female_Turnout': 51.5, 'Booth_Count': 419},
+        {'Year': 2019, 'Segment': 'Varanasi North', 'Party': 'BSP', 'Electors': 415000, 'Votes_Secured': 55000, 'Campaign_Spend_Lakhs': 40, 'Rally_Count': 5, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 54.5, 'Female_Turnout': 51.5, 'Booth_Count': 419},
 
-    # Age Parsing
-    age_col = next((c for c in df.columns if 'AGE' in c), None)
-    if age_col:
-        df['AGE_CLEAN'] = df[age_col].astype(str).str.extract(r'(\d+)')[0]
-        df['AGE_CLEAN'] = pd.to_numeric(df['AGE_CLEAN'], errors='coerce').fillna(35)
-    else:
-        df['AGE_CLEAN'] = 35
+        # --- 2014 Election Cycle ---
+        {'Year': 2014, 'Segment': 'Rohaniya', 'Party': 'BJP', 'Electors': 380000, 'Votes_Secured': 120000, 'Campaign_Spend_Lakhs': 75, 'Rally_Count': 9, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 55.0, 'Female_Turnout': 50.0, 'Booth_Count': 390},
+        {'Year': 2014, 'Segment': 'Rohaniya', 'Party': 'INC', 'Electors': 380000, 'Votes_Secured': 45000, 'Campaign_Spend_Lakhs': 35, 'Rally_Count': 4, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 55.0, 'Female_Turnout': 50.0, 'Booth_Count': 390},
+        {'Year': 2014, 'Segment': 'Rohaniya', 'Party': 'BSP', 'Electors': 380000, 'Votes_Secured': 52000, 'Campaign_Spend_Lakhs': 40, 'Rally_Count': 5, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 55.0, 'Female_Turnout': 50.0, 'Booth_Count': 390},
 
-    bins = [17, 25, 40, 60, 150]
-    labels = ['Youth (18-25)', 'Young Adult (26-40)', 'Middle Age (41-60)', 'Senior (60+)']
-    df['AGE_GROUP'] = pd.cut(df['AGE_CLEAN'], bins=bins, labels=labels).astype(str)
+        {'Year': 2014, 'Segment': 'Varanasi North', 'Party': 'BJP', 'Electors': 390000, 'Votes_Secured': 125000, 'Campaign_Spend_Lakhs': 78, 'Rally_Count': 10, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 52.0, 'Female_Turnout': 48.0, 'Booth_Count': 400},
+        {'Year': 2014, 'Segment': 'Varanasi North', 'Party': 'INC', 'Electors': 390000, 'Votes_Secured': 48000, 'Campaign_Spend_Lakhs': 38, 'Rally_Count': 5, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 52.0, 'Female_Turnout': 48.0, 'Booth_Count': 400},
+        {'Year': 2014, 'Segment': 'Varanasi North', 'Party': 'BSP', 'Electors': 390000, 'Votes_Secured': 49000, 'Campaign_Spend_Lakhs': 38, 'Rally_Count': 5, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 52.0, 'Female_Turnout': 48.0, 'Booth_Count': 400}
+    ]
+    return pd.DataFrame(records)
 
-    # Categorical Standardizations
-    for target in ['ASSEMBLY', 'CATEGORY', 'LOCALITY']:
-        actual_col = next((c for c in df.columns if target in c), None)
-        if actual_col:
-            df[target] = df[actual_col].fillna('Unknown').astype(str).str.strip().str.title()
-        else:
-            df[target] = 'Unknown'
+df_master = load_default_data()
 
-    return df
+analytical_view = st.sidebar.radio("Module", [
+    "Multi-Year Demographic & Vote Analysis",
+    "War Room Strategy & Simulation"
+])
 
-df = load_electoral_data()
+@st.cache_resource
+def train_predictive_pipeline(data):
+    train_df = data.copy()
+    
+    categorical_features = ['Party', 'Segment']
+    numeric_features = ['Year', 'Electors', 'Campaign_Spend_Lakhs', 'Rally_Count', 'OBC_Share', 'SC_Share', 'Muslim_Share', 'General_Share', 'Female_Turnout', 'Booth_Count']
+    
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('cat', OneHotEncoder(drop='first', sparse_output=False), categorical_features),
+            ('num', StandardScaler(), numeric_features)
+        ]
+    )
+    
+    pipeline = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('regressor', Ridge(alpha=1.0))
+    ])
+    
+    X = train_df[categorical_features + numeric_features]
+    y = train_df['Votes_Secured']
+    
+    pipeline.fit(X, y)
+    return pipeline
 
-if df is not None:
-    st.sidebar.header("Filter Controls")
+model_pipeline = train_predictive_pipeline(df_master)
 
-    # Assembly Segment Filter
-    all_constituencies = ["All Segments"] + sorted([x for x in df['ASSEMBLY'].unique() if x != 'Unknown'])
-    selected_constituency = st.sidebar.selectbox("Assembly Segment", all_constituencies)
-    df_const = df[df['ASSEMBLY'] == selected_constituency] if selected_constituency != "All Segments" else df.copy()
+if analytical_view == "Multi-Year Demographic & Vote Analysis":
+    st.subheader("Historical Multi-Year Comparison & Demographic Breakdown")
 
-    # Election Year Filter
-    years = sorted([x for x in df_const["YEAR"].unique() if x != 'Current'])
-    year_options = ["All Years"] + years if years else ["Current"]
-    selected_year = st.sidebar.selectbox("Election Year Focus", year_options)
+    target_segment = st.sidebar.selectbox("Select Target Segment", df_master['Segment'].unique())
+    selected_history_year = st.sidebar.selectbox("Select Historical Election Year", sorted(df_master['Year'].unique(), reverse=True))
 
-    if selected_year != "All Years":
-        df_year = df_const[df_const["YEAR"] == selected_year]
-    else:
-        df_year = df_const
+    segment_data = df_master[df_master['Segment'] == target_segment]
+    year_filtered_data = segment_data[segment_data['Year'] == selected_history_year]
 
-    # Metric Cards (Filtered strictly by selected year)
-    total_voters = len(df_year)
-    males = len(df_year[df_year["GENDER_CLEAN"] == 'Male'])
-    females = len(df_year[df_year["GENDER_CLEAN"] == 'Female'])
-    gender_ratio = round((females / males * 1000), 0) if males > 0 else 0
-    female_share = round((females / total_voters * 100), 1) if total_voters > 0 else 0
+    col_metric1, col_metric2, col_metric3 = st.columns(3)
+    total_electors = segment_data['Electors'].iloc[0]
+    booths = segment_data['Booth_Count'].iloc[0]
+    voters_per_booth = int(total_electors / booths) if booths > 0 else 0
 
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("Sample Electorate", f"{total_voters:,}")
-    m2.metric("Male Voters", f"{males:,}")
-    m3.metric("Female Voters", f"{females:,}")
-    m4.metric("Gender Ratio (F/1000M)", f"{gender_ratio:.0f}")
-    m5.metric("Female Share", f"{female_share}%")
+    col_metric1.metric("Total Electorate Base", f"{total_electors:,}")
+    col_metric2.metric("Allocated Polling Booths", f"{booths}")
+    col_metric3.metric("Voters Per Booth Density", f"{voters_per_booth:,}")
+
     st.markdown("---")
 
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "Multi-Year Dynamics",
-        "Community & Category Analysis",
-        "Comprehensive Gender & Age Demographics",
-        "Probabilistic Victory Simulator & Candidate Engine"
-    ])
+    col_left, col_right = st.columns(2)
 
-    # TAB 1: Multi-Year Trends
-    with tab1:
-        st.subheader("Multi-Year Electorate Dynamics")
-        col_t1, col_t2 = st.columns(2)
+    with col_left:
+        st.markdown(f"#### Party Performance in {selected_history_year} ({target_segment})")
+        if not year_filtered_data.empty:
+            st.dataframe(year_filtered_data[['Party', 'Votes_Secured', 'Campaign_Spend_Lakhs', 'Rally_Count']], hide_index=True, use_container_width=True)
 
-        with col_t1:
-            st.markdown("##### Total Voter Growth Across Election Years")
-            if len(years) > 0:
-                year_counts = df_const.groupby("YEAR")["VOTER_COUNT"].sum().reset_index()
-                fig_y, ax_y = plt.subplots(figsize=(6, 3.5))
-                sns.barplot(data=year_counts, x="YEAR", y="VOTER_COUNT", palette="Blues_d", ax=ax_y)
-                ax_y.set_ylabel("Voters")
-                st.pyplot(fig_y)
-                plt.close(fig_y)
+            bar_fig = px.bar(year_filtered_data, x='Party', y='Votes_Secured', color='Party', title=f"Votes Secured by Party ({selected_history_year})")
+            st.plotly_chart(bar_fig, use_container_width=True)
+        else:
+            st.warning("No record found for this specific year and segment combination.")
 
-                st.markdown("**Yearly Voter Breakdown**")
-                st.dataframe(year_counts.rename(columns={"YEAR": "Year", "VOTER_COUNT": "Total Voters"}), use_container_width=True)
+    with col_right:
+        st.markdown(f"#### Caste and Community Distribution ({target_segment})")
+        demo_df = segment_data[['OBC_Share', 'SC_Share', 'Muslim_Share', 'General_Share']].drop_duplicates()
+        if not demo_df.empty:
+            demo_melted = demo_df.melt(var_name='Community', value_name='Share (%)')
+            color_map = {'OBC_Share': '#F59E0B', 'SC_Share': '#3B82F6', 'Muslim_Share': '#10B981', 'General_Share': '#6366F1'}
 
-        with col_t2:
-            st.markdown("##### Community & Category Shift Across Years")
-            if len(years) > 0 and not df_const[df_const['CATEGORY'] != 'Unknown'].empty:
-                cat_trend = df_const[df_const['CATEGORY'] != 'Unknown'].groupby(["YEAR", "CATEGORY"])["VOTER_COUNT"].sum().reset_index()
-                fig_ct, ax_ct = plt.subplots(figsize=(6, 3.5))
-                sns.lineplot(data=cat_trend, x="YEAR", y="VOTER_COUNT", hue="CATEGORY", marker="o", ax=ax_ct)
-                ax_ct.set_ylabel("Voters")
-                st.pyplot(fig_ct)
-                plt.close(fig_ct)
+            pie_fig = px.pie(demo_melted, values='Share (%)', names='Community', color='Community', color_discrete_map=color_map, hole=0.4)
+            pie_fig.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(pie_fig, use_container_width=True)
 
-                st.markdown("**Category Dynamics Matrix**")
-                cat_pivot = cat_trend.pivot(index='YEAR', columns='CATEGORY', values='VOTER_COUNT').fillna(0).astype(int)
-                st.dataframe(cat_pivot, use_container_width=True)
+    st.markdown("---")
+    st.markdown("#### Multi-Year Trend Analysis Across Cycles (2014 - 2024)")
+    trend_fig = px.line(segment_data, x='Year', y='Votes_Secured', color='Party', markers=True, title=f"Vote Trajectory Across Years in {target_segment}")
+    st.plotly_chart(trend_fig, use_container_width=True)
 
-    # TAB 2: Community & Category Analysis
-    with tab2:
-        st.subheader(f"Community and Category Breakdown ({selected_year})")
-        col_a, col_b = st.columns(2)
+elif analytical_view == "War Room Strategy & Simulation":
+    st.subheader("Advanced Political Consultant War Room")
 
-        with col_a:
-            st.markdown("##### Category Density in Top Localities")
-            clean_loc = df_year[(df_year['LOCALITY'] != 'Unknown') & (df_year['CATEGORY'] != 'Unknown')]
-            if not clean_loc.empty:
-                top_locs = clean_loc['LOCALITY'].value_counts().head(10).index
-                pivot_cat = pd.crosstab(clean_loc[clean_loc['LOCALITY'].isin(top_locs)]['LOCALITY'], clean_loc['CATEGORY'])
-                fig, ax = plt.subplots(figsize=(7, 4))
-                sns.heatmap(pivot_cat, annot=True, fmt="d", cmap="Blues", ax=ax, cbar=False)
-                ax.set_ylabel("Locality")
-                st.pyplot(fig)
-                plt.close(fig)
+    forecast_year = st.sidebar.selectbox("Target Forecast Year", [2029, 2034, 2039])
+    consulting_party = st.sidebar.selectbox("Select Client Party", df_master['Party'].unique())
+    target_segment = st.sidebar.selectbox("Select Target Segment", df_master['Segment'].unique())
 
-                st.markdown("**Locality vs Category Data Table**")
-                st.dataframe(pivot_cat, use_container_width=True)
+    st.markdown(f"**Advising Portfolio: {consulting_party} | Target Region: {target_segment} | Projection Cycle: {forecast_year}**")
 
-        with col_b:
-            st.markdown("##### Category Share Distribution")
-            clean_cat = df_year[df_year['CATEGORY'] != 'Unknown']
-            if not clean_cat.empty:
-                cat_df = clean_cat['CATEGORY'].value_counts().reset_index()
-                cat_df.columns = ["Category", "Voters"]
-                fig2, ax2 = plt.subplots(figsize=(7, 4))
-                sns.barplot(data=cat_df, x="Category", y="Voters", palette="mako", ax=ax2)
-                st.pyplot(fig2)
-                plt.close(fig2)
+    st.markdown("#### Strategic Caste & Community Mobilization Focus Checkboxes")
+    col_cb1, col_cb2, col_cb3, col_cb4 = st.columns(4)
+    focus_obc = col_cb1.checkbox("Focus OBC Block", value=True)
+    focus_sc = col_cb2.checkbox("Focus SC Block", value=False)
+    focus_muslim = col_cb3.checkbox("Focus Muslim Block", value=False)
+    focus_general = col_cb4.checkbox("Focus General Block", value=False)
 
-                st.markdown("**Category Voter Summary**")
-                st.dataframe(cat_df, use_container_width=True)
+    st.markdown("---")
+    col_sim1, col_sim2, col_sim3 = st.columns(3)
+    with col_sim1:
+        new_spend = st.slider("Campaign Budget Allocation (Lakhs)", min_value=10, max_value=250, value=85)
+    with col_sim2:
+        new_rallies = st.slider("Targeted Ground Rallies", min_value=1, max_value=120, value=12)
+    with col_sim3:
+        female_focus_boost = st.slider("Women Voter Outreach Intensity (%)", min_value=1, max_value=50, value=15)
 
-    # TAB 3: Comprehensive Gender & Age Demographics
-    with tab3:
-        st.subheader(f"Comprehensive Gender & Age Demographics ({selected_year})")
+    if st.button("Execute War Room Simulation"):
+        sim_records = []
+        seg_data_recent = df_master[(df_master['Segment'] == target_segment) & (df_master['Year'] == 2024)]
+        growth_multiplier = 1.05 if forecast_year == 2029 else (1.10 if forecast_year == 2034 else 1.15)
 
-        row1_col1, row1_col2 = st.columns(2)
-        with row1_col1:
-            st.markdown("##### Age Distribution Across Electorate")
-            age_dist = df_year["AGE_GROUP"].value_counts().reset_index()
-            age_dist.columns = ["Age Group", "Voters"]
-            if age_dist["Voters"].sum() > 0:
-                fig3, ax3 = plt.subplots(figsize=(6, 3.5))
-                order_list = ['Youth (18-25)', 'Young Adult (26-40)', 'Middle Age (41-60)', 'Senior (60+)']
-                sns.barplot(data=age_dist, x="Age Group", y="Voters", palette="viridis", ax=ax3, order=order_list)
-                plt.xticks(rotation=15, ha='right')
-                st.pyplot(fig3)
-                plt.close(fig3)
+        for _, row in seg_data_recent.iterrows():
+            rec = row.to_dict()
+            party_name = row['Party']
+            rec['Year'] = forecast_year
+            rec['Electors'] = int(row['Electors'] * growth_multiplier)
 
-                st.markdown("**Age Group Breakdown**")
-                st.dataframe(age_dist, use_container_width=True)
+            if party_name == consulting_party:
+                rec['Campaign_Spend_Lakhs'] = new_spend
+                rec['Rally_Count'] = new_rallies
+                rec['Female_Turnout'] = min(75.0, row['Female_Turnout'] + (female_focus_boost * 0.2))
 
-        with row1_col2:
-            st.markdown("##### Gender Split by Age Group")
-            clean_gender = df_year[df_year['GENDER_CLEAN'] != 'Unknown']
-            if not clean_gender.empty:
-                age_gender = pd.crosstab(clean_gender["AGE_GROUP"], clean_gender["GENDER_CLEAN"])
-                valid_idx = [i for i in ['Youth (18-25)', 'Young Adult (26-40)', 'Middle Age (41-60)', 'Senior (60+)'] if i in age_gender.index]
-                age_gender = age_gender.loc[valid_idx]
-                fig4, ax4 = plt.subplots(figsize=(6, 3.5))
-                age_gender.plot(kind="bar", stacked=True, ax=ax4, color=["#e377c2", "#1f77b4", "#2ca02c"])
-                plt.xticks(rotation=15, ha='right')
-                plt.ylabel("Voters")
-                st.pyplot(fig4)
-                plt.close(fig4)
+            # Prepare feature input DataFrame
+            input_features = pd.DataFrame([{
+                'Party': party_name,
+                'Segment': target_segment,
+                'Year': forecast_year,
+                'Electors': rec['Electors'],
+                'Campaign_Spend_Lakhs': rec['Campaign_Spend_Lakhs'],
+                'Rally_Count': rec['Rally_Count'],
+                'OBC_Share': rec['OBC_Share'],
+                'SC_Share': rec['SC_Share'],
+                'Muslim_Share': rec['Muslim_Share'],
+                'General_Share': rec['General_Share'],
+                'Female_Turnout': rec['Female_Turnout'],
+                'Booth_Count': rec['Booth_Count']
+            }])
 
-                st.markdown("**Gender x Age Group Matrix**")
-                st.dataframe(age_gender, use_container_width=True)
+            # Get raw ML prediction from pipeline
+            raw_ml_prediction = model_pipeline.predict(input_features)[0]
+
+            if party_name == consulting_party:
+                caste_multiplier = 1.0
+                if focus_obc: caste_multiplier += (row['OBC_Share'] / 100.0) * 0.06
+                if focus_sc: caste_multiplier += (row['SC_Share'] / 100.0) * 0.06
+                if focus_muslim: caste_multiplier += (row['Muslim_Share'] / 100.0) * 0.06
+                if focus_general: caste_multiplier += (row['General_Share'] / 100.0) * 0.06
+
+                final_votes = raw_ml_prediction * caste_multiplier
+                rec['Simulated_Votes'] = int(max(1000, final_votes))
+            else:
+                rec['Simulated_Votes'] = int(max(1000, raw_ml_prediction))
+
+            sim_records.append(rec)
+
+        df_sim = pd.DataFrame(sim_records)
+        df_sim = df_sim.sort_values(by='Simulated_Votes', ascending=False)
 
         st.markdown("---")
-        row2_col1, row2_col2 = st.columns(2)
+        st.markdown(f"#### Simulated Electoral Outcome for {forecast_year}")
+        display_columns = ['Party', 'Simulated_Votes', 'Electors', 'Campaign_Spend_Lakhs', 'Rally_Count', 'Female_Turnout', 'OBC_Share', 'SC_Share', 'Muslim_Share', 'General_Share']
+        st.dataframe(df_sim[display_columns], hide_index=True, use_container_width=True)
 
-        with row2_col1:
-            st.markdown("##### Gender Ratio (Females per 1000 Males) by Age Group")
-            if not clean_gender.empty and 'Male' in age_gender.columns and 'Female' in age_gender.columns:
-                ratio_by_age = (age_gender['Female'] / age_gender['Male'] * 1000).round(0).reset_index()
-                ratio_by_age.columns = ['Age Group', 'Gender Ratio']
-                fig5, ax5 = plt.subplots(figsize=(6, 3.5))
-                sns.barplot(data=ratio_by_age, x='Age Group', y='Gender Ratio', palette="magma", ax=ax5)
-                ax5.axhline(1000, color='red', linestyle='--', label='Parity (1000)')
-                plt.xticks(rotation=15, ha='right')
-                plt.legend()
-                st.pyplot(fig5)
-                plt.close(fig5)
-
-                st.markdown("**Age Group Gender Ratios**")
-                st.dataframe(ratio_by_age, use_container_width=True)
-
-        with row2_col2:
-            st.markdown("##### Top 10 Localities by Female Electorate Share (%)")
-            clean_gen_loc = df_year[(df_year['GENDER_CLEAN'] != 'Unknown') & (df_year['LOCALITY'] != 'Unknown')]
-            if not clean_gen_loc.empty:
-                loc_gender = pd.crosstab(clean_gen_loc["LOCALITY"], clean_gen_loc["GENDER_CLEAN"])
-                loc_gender['Total'] = loc_gender.sum(axis=1)
-                loc_gender = loc_gender[loc_gender['Total'] >= 50]
-                if 'Female' in loc_gender.columns:
-                    loc_gender['Female Share (%)'] = (loc_gender['Female'] / loc_gender['Total'] * 100).round(1)
-                    top_female_locs = loc_gender.sort_values(by='Female Share (%)', ascending=False).head(10).reset_index()
-
-                    fig6, ax6 = plt.subplots(figsize=(6, 3.5))
-                    sns.barplot(data=top_female_locs, y='LOCALITY', x='Female Share (%)', palette="rocket", ax=ax6)
-                    ax6.set_xlabel("Female Share (%)")
-                    ax6.set_ylabel("Locality")
-                    st.pyplot(fig6)
-                    plt.close(fig6)
-
-                    st.markdown("**Top Female Density Localities**")
-                    st.dataframe(top_female_locs[['LOCALITY', 'Total', 'Female', 'Female Share (%)']], use_container_width=True)
-
-    # TAB 4: Probabilistic Victory Simulator & Candidate Engine
-    with tab4:
-        st.subheader("Probabilistic Victory Simulator & Candidate Strategy Engine")
-        st.markdown("Simulate electoral victory probability over a standardized **2 Lakh (200,000 voter)** constituency using Binomial / Normal distribution approximations.")
-
-        target_categories = sorted([x for x in df_year["CATEGORY"].unique() if x != 'Unknown'])
-
-        st.markdown("##### 1. Constituency & Candidate Profile Parameters")
-        cand_col1, cand_col2, cand_col3, cand_col4 = st.columns(4)
-        with cand_col1:
-            constituency_scale = st.number_input("Constituency Scale (Voters)", min_value=50000, max_value=1000000, value=200000, step=10000)
-        with cand_col2:
-            cand_gender = st.selectbox("Candidate Gender", ["Female", "Male", "Other"])
-        with cand_col3:
-            cand_age_group = st.selectbox("Candidate Age Bracket", ["Middle Age (41-60)", "Young Adult (26-40)", "Senior (60+)", "Youth (18-25)"])
-        with cand_col4:
-            cand_locality_status = st.selectbox("Candidate Standing", ["Local Resident", "External / Non-Local"])
-
-        st.markdown("##### 2. Turnout & Support Baseline Models")
-        turn_col1, turn_col2, turn_col3 = st.columns(3)
-        with turn_col1:
-            expected_turnout = st.slider("Polling Day Turnout (%)", min_value=30, max_value=90, value=65, step=1)
-        with turn_col2:
-            target_support_base = st.slider("Target Coalition Support Rate (%)", min_value=20, max_value=95, value=70, step=1)
-        with turn_col3:
-            non_target_support_base = st.slider("Baseline Non-Target Support Rate (%)", min_value=0, max_value=40, value=15, step=1)
-
-        st.markdown("##### 3. Coalition Target Selection")
-        coal_col1, coal_col2 = st.columns([2, 1])
-        with coal_col1:
-            selected_targets = st.multiselect("Select Target Coalition Communities", target_categories, default=target_categories[:2] if len(target_categories) > 1 else target_categories)
-            filter_youth = st.checkbox("Focus Target Coalition on Youth Voters (18-25)", value=False)
-            filter_female = st.checkbox("Focus Target Coalition on Female Voters", value=False)
-
-        # Dynamic Candidate Synergy Calculations
-        synergy_boost = 0.0
-        synergy_reasons = []
-
-        if cand_gender == "Female" and filter_female:
-            synergy_boost += 6.0
-            synergy_reasons.append("+6.0% Female Candidate Alignment with Female Voters")
-        elif cand_gender == "Female":
-            synergy_boost += 3.0
-            synergy_reasons.append("+3.0% Organic Female Candidate Voter Preference")
-
-        if cand_age_group in ["Youth (18-25)", "Young Adult (26-40)"] and filter_youth:
-            synergy_boost += 5.0
-            synergy_reasons.append("+5.0% Youth Candidate Alignment with Young Voters")
-
-        if cand_locality_status == "Local Resident":
-            synergy_boost += 3.0
-            synergy_reasons.append("+3.0% Local Roots Advantage")
-        else:
-            synergy_boost -= 2.0
-            synergy_reasons.append("-2.0% External Candidate Penalty")
-
-        effective_target_support = min(0.95, max(0.05, (target_support_base + synergy_boost) / 100.0))
-        effective_non_target_support = non_target_support_base / 100.0
-        turnout_rate = expected_turnout / 100.0
-
-        # Sub-Demographic Mathematical Modeling
-        sim_df = df_year[df_year["CATEGORY"].isin(selected_targets)]
-        if filter_youth:
-            sim_df = sim_df[sim_df["AGE_GROUP"] == 'Youth (18-25)']
-        if filter_female:
-            sim_df = sim_df[sim_df["GENDER_CLEAN"] == 'Female']
-
-        target_sample_size = len(sim_df)
-        total_sample_size = len(df_year) if len(df_year) > 0 else 1
-
-        target_share_of_electorate = target_sample_size / total_sample_size
-
-        # Scale to 200,000 Constituency
-        scaled_target_pool = int(constituency_scale * target_share_of_electorate)
-        scaled_non_target_pool = constituency_scale - scaled_target_pool
-
-        # Expected Votes & Variance Calculations
-        target_cast_votes = scaled_target_pool * turnout_rate
-        non_target_cast_votes = scaled_non_target_pool * turnout_rate
-        total_cast_votes = target_cast_votes + non_target_cast_votes
-
-        expected_target_votes = target_cast_votes * effective_target_support
-        expected_non_target_votes = non_target_cast_votes * effective_non_target_support
-        expected_total_votes = expected_target_votes + expected_non_target_votes
-
-        win_threshold = total_cast_votes * 0.45 # 45% plurality target
-
-        # Binomial / Normal Distribution Uncertainty Modeling
-        var_target = target_cast_votes * effective_target_support * (1 - effective_target_support)
-        var_non_target = non_target_cast_votes * effective_non_target_support * (1 - effective_non_target_support)
-        std_error = math.sqrt(var_target + var_non_target)
-
-        expected_margin = expected_total_votes - win_threshold
-        win_probability = normal_cdf(expected_total_votes, win_threshold, std_error) * 100
-
-        # Approximated Margin Ranges (95% CI rounded to nearest 100)
-        margin_lower = int(round((expected_margin - 1.96 * std_error) / 100.0) * 100)
-        margin_upper = int(round((expected_margin + 1.96 * std_error) / 100.0) * 100)
-
-        st.markdown("---")
-        st.markdown("##### 4. Probabilistic Forecast & Win Margin Analysis")
-
-        res_m1, res_m2, res_m3, res_m4 = st.columns(4)
-        res_m1.metric("Target Share of Electorate", f"{target_share_of_electorate*100:.1f}% ({scaled_target_pool:,} voters)")
-        res_m2.metric("Projected Total Cast Votes", f"{int(total_cast_votes):,}")
-        res_m3.metric("Win Plurality Threshold (45%)", f"{int(win_threshold):,}")
-        res_m4.metric("Win Probability", f"{win_probability:.1f}%")
-
-        st.markdown("##### Approximated Outcome Range & Directives")
-
-        if synergy_reasons:
-            st.info("Candidate Synergy Impacts Applied: " + " | ".join(synergy_reasons))
-
-        if margin_lower > 0:
-            st.success(f"Victory Highly Probable: Estimated surplus of approximately {abs(margin_lower):,} to {abs(margin_upper):,} votes above the victory threshold.")
-        elif margin_upper > 0:
-            st.warning(f"Competitive Race (Margin of Error): Outcome ranges from a potential deficit of {abs(margin_lower):,} votes to a surplus of {abs(margin_upper):,} votes.")
-        else:
-            st.error(f"Deficit Warning: Projected deficit of approximately {abs(margin_upper):,} to {abs(margin_lower):,} votes below the required 45% mark.")
-
-        st.markdown("##### Executive Directives")
-        directives = []
-
-        if cand_gender == "Female":
-            directives.append("Female Candidate Directives: Mobilize female ward captains across high female density localities. Focus messaging on community welfare, household economics, and local safety.")
-
-        if cand_locality_status == "External / Non-Local":
-            directives.append("Non-Local Counter-Strategy: Appoint prominent local community leaders as co-campaign leads to neutralize non-local perception.")
-
-        if filter_youth or cand_age_group in ["Youth (18-25)", "Young Adult (26-40)"]:
-            directives.append("Youth Engagement Strategy: Focus digital campaigns on recruitment drives, educational access, and regional employment opportunities.")
-
-        if expected_margin < 0:
-            needed_support_increase = round((abs(expected_margin) / (target_cast_votes if target_cast_votes > 0 else 1)) * 100, 1)
-            directives.append(f"Coalition Expansion Required: Expand target coalition categories or increase support capture rate by approximately {needed_support_increase}% to achieve victory.")
-
-        for d in directives:
-            st.write(f"- {d}")
-
-        st.markdown("##### Targeted Demographic Base Matrix")
-        sim_summary = sim_df.groupby(['CATEGORY', 'GENDER_CLEAN'])['VOTER_COUNT'].sum().unstack(fill_value=0)
-        st.dataframe(sim_summary, use_container_width=True)
-
-else:
-    st.error("No CSV files found in directory. Place constituency CSV files in the project folder to proceed.")
+        chart = alt.Chart(df_sim).mark_bar().encode(
+            x=alt.X('Party:N', sort='-y'),
+            y='Simulated_Votes:Q',
+            color=alt.condition(alt.datum.Party == consulting_party, alt.value('#F59E0B'), alt.value('#374151'))
+        ).properties(height=300)
+        st.altair_chart(chart, use_container_width=True)
