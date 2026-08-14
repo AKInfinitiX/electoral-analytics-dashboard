@@ -1,231 +1,370 @@
-%%writefile app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
-import altair as alt
 import plotly.express as px
-from sklearn.linear_model import Ridge
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_absolute_percentage_error
+import plotly.graph_objects as go
+import joblib
+import os
 
-st.set_page_config(page_title="Electoral Intelligence Portal", layout="wide", initial_sidebar_state="expanded")
-st.markdown("### Electoral Intelligence Portal")
-st.sidebar.header("Parameters")
+# App initialization
+st.set_page_config(
+    page_title="Varanasi Strategic Intelligence Advisory",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-@st.cache_data
-def load_default_data():
-    records = [
-        # --- 2024 Election Cycle ---
-        {'Year': 2024, 'Segment': 'Rohaniya', 'Party': 'BJP', 'Electors': 430500, 'Votes_Secured': 127508, 'Campaign_Spend_Lakhs': 85, 'Rally_Count': 12, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.5, 'Female_Turnout': 55.4, 'Booth_Count': 432},
-        {'Year': 2024, 'Segment': 'Rohaniya', 'Party': 'INC', 'Electors': 430500, 'Votes_Secured': 101225, 'Campaign_Spend_Lakhs': 55, 'Rally_Count': 8, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.5, 'Female_Turnout': 55.4, 'Booth_Count': 432},
-        {'Year': 2024, 'Segment': 'Rohaniya', 'Party': 'BSP', 'Electors': 430500, 'Votes_Secured': 10527, 'Campaign_Spend_Lakhs': 15, 'Rally_Count': 2, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.5, 'Female_Turnout': 55.4, 'Booth_Count': 432},
+# Core styling
+st.markdown("""
+    <style>
+    .block-container { padding-top: 1.2rem; padding-bottom: 2rem; }
+    h1, h2, h3, h4 { font-family: 'Segoe UI', Roboto, Helvetica, sans-serif; font-weight: 600; }
+    .verdict-box {
+        padding: 18px 24px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        border: 1px solid #CBD5E1;
+    }
+    .verdict-win { background-color: #F0FDF4; border-left: 6px solid #16A34A; }
+    .verdict-loss { background-color: #FEF2F2; border-left: 6px solid #DC2626; }
+    .verdict-title { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
+    .verdict-subtitle { font-size: 0.95rem; color: #475569; }
+    .chart-caption { font-size: 0.85rem; color: #64748B; margin-bottom: 8px; font-style: italic; }
+    </style>
+""", unsafe_allow_html=True)
 
-        {'Year': 2024, 'Segment': 'Varanasi North', 'Party': 'BJP', 'Electors': 442100, 'Votes_Secured': 131241, 'Campaign_Spend_Lakhs': 90, 'Rally_Count': 15, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 55.2, 'Female_Turnout': 53.1, 'Booth_Count': 445},
-        {'Year': 2024, 'Segment': 'Varanasi North', 'Party': 'INC', 'Electors': 442100, 'Votes_Secured': 101731, 'Campaign_Spend_Lakhs': 60, 'Rally_Count': 10, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 55.2, 'Female_Turnout': 53.1, 'Booth_Count': 445},
-        {'Year': 2024, 'Segment': 'Varanasi North', 'Party': 'BSP', 'Electors': 442100, 'Votes_Secured': 4173, 'Campaign_Spend_Lakhs': 12, 'Rally_Count': 1, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 55.2, 'Female_Turnout': 53.1, 'Booth_Count': 445},
-
-        {'Year': 2024, 'Segment': 'Varanasi South', 'Party': 'BJP', 'Electors': 355000, 'Votes_Secured': 97878, 'Campaign_Spend_Lakhs': 70, 'Rally_Count': 10, 'OBC_Share': 21.0, 'SC_Share': 12.0, 'Muslim_Share': 22.0, 'General_Share': 41.0, 'Male_Turnout': 52.1, 'Female_Turnout': 50.4, 'Booth_Count': 358},
-        {'Year': 2024, 'Segment': 'Varanasi South', 'Party': 'INC', 'Electors': 355000, 'Votes_Secured': 81732, 'Campaign_Spend_Lakhs': 50, 'Rally_Count': 7, 'OBC_Share': 21.0, 'SC_Share': 12.0, 'Muslim_Share': 22.0, 'General_Share': 41.0, 'Male_Turnout': 52.1, 'Female_Turnout': 50.4, 'Booth_Count': 358},
-        {'Year': 2024, 'Segment': 'Varanasi South', 'Party': 'BSP', 'Electors': 355000, 'Votes_Secured': 1032, 'Campaign_Spend_Lakhs': 5, 'Rally_Count': 0, 'OBC_Share': 21.0, 'SC_Share': 12.0, 'Muslim_Share': 22.0, 'General_Share': 41.0, 'Male_Turnout': 52.1, 'Female_Turnout': 50.4, 'Booth_Count': 358},
-
-        {'Year': 2024, 'Segment': 'Varanasi Cantt.', 'Party': 'BJP', 'Electors': 440200, 'Votes_Secured': 145922, 'Campaign_Spend_Lakhs': 95, 'Rally_Count': 14, 'OBC_Share': 26.0, 'SC_Share': 14.0, 'Muslim_Share': 17.0, 'General_Share': 39.0, 'Male_Turnout': 55.8, 'Female_Turnout': 53.0, 'Booth_Count': 441},
-        {'Year': 2024, 'Segment': 'Varanasi Cantt.', 'Party': 'INC', 'Electors': 440200, 'Votes_Secured': 95000, 'Campaign_Spend_Lakhs': 65, 'Rally_Count': 9, 'OBC_Share': 26.0, 'SC_Share': 14.0, 'Muslim_Share': 17.0, 'General_Share': 39.0, 'Male_Turnout': 55.8, 'Female_Turnout': 53.0, 'Booth_Count': 441},
-        {'Year': 2024, 'Segment': 'Varanasi Cantt.', 'Party': 'BSP', 'Electors': 440200, 'Votes_Secured': 8500, 'Campaign_Spend_Lakhs': 10, 'Rally_Count': 1, 'OBC_Share': 26.0, 'SC_Share': 14.0, 'Muslim_Share': 17.0, 'General_Share': 39.0, 'Male_Turnout': 55.8, 'Female_Turnout': 53.0, 'Booth_Count': 441},
-
-        {'Year': 2024, 'Segment': 'Sevapuri', 'Party': 'BJP', 'Electors': 361500, 'Votes_Secured': 108890, 'Campaign_Spend_Lakhs': 75, 'Rally_Count': 11, 'OBC_Share': 42.0, 'SC_Share': 22.0, 'Muslim_Share': 10.0, 'General_Share': 21.0, 'Male_Turnout': 61.2, 'Female_Turnout': 58.9, 'Booth_Count': 365},
-        {'Year': 2024, 'Segment': 'Sevapuri', 'Party': 'INC', 'Electors': 361500, 'Votes_Secured': 80000, 'Campaign_Spend_Lakhs': 55, 'Rally_Count': 8, 'OBC_Share': 42.0, 'SC_Share': 22.0, 'Muslim_Share': 10.0, 'General_Share': 21.0, 'Male_Turnout': 61.2, 'Female_Turnout': 58.9, 'Booth_Count': 365},
-        {'Year': 2024, 'Segment': 'Sevapuri', 'Party': 'BSP', 'Electors': 361500, 'Votes_Secured': 9500, 'Campaign_Spend_Lakhs': 15, 'Rally_Count': 2, 'OBC_Share': 42.0, 'SC_Share': 22.0, 'Muslim_Share': 10.0, 'General_Share': 21.0, 'Male_Turnout': 61.2, 'Female_Turnout': 58.9, 'Booth_Count': 365},
-
-        # --- 2019 Election Cycle ---
-        {'Year': 2019, 'Segment': 'Rohaniya', 'Party': 'BJP', 'Electors': 405200, 'Votes_Secured': 135400, 'Campaign_Spend_Lakhs': 80, 'Rally_Count': 10, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.0, 'Female_Turnout': 54.0, 'Booth_Count': 408},
-        {'Year': 2019, 'Segment': 'Rohaniya', 'Party': 'INC', 'Electors': 405200, 'Votes_Secured': 50000, 'Campaign_Spend_Lakhs': 40, 'Rally_Count': 5, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.0, 'Female_Turnout': 54.0, 'Booth_Count': 408},
-        {'Year': 2019, 'Segment': 'Rohaniya', 'Party': 'BSP', 'Electors': 405200, 'Votes_Secured': 60000, 'Campaign_Spend_Lakhs': 45, 'Rally_Count': 6, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 58.0, 'Female_Turnout': 54.0, 'Booth_Count': 408},
-
-        {'Year': 2019, 'Segment': 'Varanasi North', 'Party': 'BJP', 'Electors': 415000, 'Votes_Secured': 141200, 'Campaign_Spend_Lakhs': 85, 'Rally_Count': 12, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 54.5, 'Female_Turnout': 51.5, 'Booth_Count': 419},
-        {'Year': 2019, 'Segment': 'Varanasi North', 'Party': 'INC', 'Electors': 415000, 'Votes_Secured': 65000, 'Campaign_Spend_Lakhs': 50, 'Rally_Count': 7, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 54.5, 'Female_Turnout': 51.5, 'Booth_Count': 419},
-        {'Year': 2019, 'Segment': 'Varanasi North', 'Party': 'BSP', 'Electors': 415000, 'Votes_Secured': 55000, 'Campaign_Spend_Lakhs': 40, 'Rally_Count': 5, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 54.5, 'Female_Turnout': 51.5, 'Booth_Count': 419},
-
-        # --- 2014 Election Cycle ---
-        {'Year': 2014, 'Segment': 'Rohaniya', 'Party': 'BJP', 'Electors': 380000, 'Votes_Secured': 120000, 'Campaign_Spend_Lakhs': 75, 'Rally_Count': 9, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 55.0, 'Female_Turnout': 50.0, 'Booth_Count': 390},
-        {'Year': 2014, 'Segment': 'Rohaniya', 'Party': 'INC', 'Electors': 380000, 'Votes_Secured': 45000, 'Campaign_Spend_Lakhs': 35, 'Rally_Count': 4, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 55.0, 'Female_Turnout': 50.0, 'Booth_Count': 390},
-        {'Year': 2014, 'Segment': 'Rohaniya', 'Party': 'BSP', 'Electors': 380000, 'Votes_Secured': 52000, 'Campaign_Spend_Lakhs': 40, 'Rally_Count': 5, 'OBC_Share': 40.0, 'SC_Share': 19.0, 'Muslim_Share': 12.0, 'General_Share': 24.0, 'Male_Turnout': 55.0, 'Female_Turnout': 50.0, 'Booth_Count': 390},
-
-        {'Year': 2014, 'Segment': 'Varanasi North', 'Party': 'BJP', 'Electors': 390000, 'Votes_Secured': 125000, 'Campaign_Spend_Lakhs': 78, 'Rally_Count': 10, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 52.0, 'Female_Turnout': 48.0, 'Booth_Count': 400},
-        {'Year': 2014, 'Segment': 'Varanasi North', 'Party': 'INC', 'Electors': 390000, 'Votes_Secured': 48000, 'Campaign_Spend_Lakhs': 38, 'Rally_Count': 5, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 52.0, 'Female_Turnout': 48.0, 'Booth_Count': 400},
-        {'Year': 2014, 'Segment': 'Varanasi North', 'Party': 'BSP', 'Electors': 390000, 'Votes_Secured': 49000, 'Campaign_Spend_Lakhs': 38, 'Rally_Count': 5, 'OBC_Share': 23.0, 'SC_Share': 14.0, 'Muslim_Share': 25.0, 'General_Share': 34.0, 'Male_Turnout': 52.0, 'Female_Turnout': 48.0, 'Booth_Count': 400}
-    ]
-    return pd.DataFrame(records)
-
-df_master = load_default_data()
-
-analytical_view = st.sidebar.radio("Module", [
-    "Multi-Year Demographic & Vote Analysis",
-    "War Room Strategy & Simulation"
-])
-
+# Load resources
 @st.cache_resource
-def train_predictive_pipeline(data):
-    train_df = data.copy()
-    
-    categorical_features = ['Party', 'Segment']
-    numeric_features = ['Year', 'Electors', 'Campaign_Spend_Lakhs', 'Rally_Count', 'OBC_Share', 'SC_Share', 'Muslim_Share', 'General_Share', 'Female_Turnout', 'Booth_Count']
-    
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ('cat', OneHotEncoder(drop='first', sparse_output=False), categorical_features),
-            ('num', StandardScaler(), numeric_features)
-        ]
+def load_assets(data_dir):
+    df_2024 = pd.read_csv(os.path.join(data_dir, "Varanasi_Election_2024_Actuals.csv"))
+    df_2019 = pd.read_csv(os.path.join(data_dir, "Varanasi_Election_2019_Backcast.csv"))
+    model_payload = joblib.load(os.path.join(data_dir, "trained_election_models.joblib"))
+    return df_2024, df_2019, model_payload
+
+# Set path to local directory
+DATA_PATH = "./"
+
+try:
+    df_2024, df_2019, model_payload = load_assets(DATA_PATH)
+    turnout_model = model_payload['turnout_model']
+    party_models = model_payload['party_models']
+    train_features = model_payload['train_features']
+    modeled_parties = [p for p in model_payload['all_parties'] if p != 'Other']
+except Exception as e:
+    st.error(f"Asset Ingestion Error: {e}")
+    st.stop()
+
+def softmax(x):
+    e_x = np.exp(x - np.max(x, axis=1, keepdims=True))
+    return e_x / e_x.sum(axis=1, keepdims=True)
+
+SCALE_FACTOR = 5.15
+
+# Sidebar parameters
+st.sidebar.title("Strategic Navigation")
+target_party = st.sidebar.selectbox("Select Target / Client Party", modeled_parties)
+
+panel_selection = st.sidebar.radio(
+    "Analytical Modules",
+    ["Panel 1: Strategic Baseline & Demographics", "Panel 2: 2029 Predictive Scenario Engine"]
+)
+st.sidebar.markdown("---")
+
+# Baseline calculations
+total_electors_base = int(df_2024['Total_Electors_2024'].sum())
+total_votes_base = int(df_2024['Total Votes'].sum() * SCALE_FACTOR)
+constituency_turnout_base = (total_votes_base / total_electors_base) * 100 if total_electors_base > 0 else 0
+
+opponent_parties = [p for p in modeled_parties if p != target_party]
+
+target_votes_base = int(df_2024[target_party].sum() * SCALE_FACTOR)
+target_share_base = (df_2024[target_party].sum() / df_2024['Total Votes'].sum()) * 100
+
+opp_sums = {p: int(df_2024[p].sum() * SCALE_FACTOR) for p in opponent_parties}
+lead_opponent = max(opp_sums, key=opp_sums.get)
+lead_opp_votes_base = opp_sums[lead_opponent]
+lead_opp_share_base = (df_2024[lead_opponent].sum() / df_2024['Total Votes'].sum()) * 100
+
+net_margin_base = target_votes_base - lead_opp_votes_base
+
+df_2024['Base_Winner'] = df_2024[modeled_parties].idxmax(axis=1)
+booths_won_base = int((df_2024['Base_Winner'] == target_party).sum())
+total_booths = len(df_2024)
+
+df_2024['Max_Opponent_Votes'] = df_2024[opponent_parties].max(axis=1)
+df_2024['Margin_Votes'] = df_2024[target_party] - df_2024['Max_Opponent_Votes']
+df_2024['Margin_Pct'] = (df_2024['Margin_Votes'] / df_2024['Total Votes']) * 100
+
+df_2024['Booth_Category'] = np.where(
+    df_2024[f'{target_party}_Vote_Share'] >= 0.50, 'Stronghold (>50%)',
+    np.where(
+        df_2024['Margin_Pct'] >= 0,
+        np.where(df_2024['Margin_Pct'] <= 5.0, 'Lean Positive (Vulnerable)', 'Safe Positive'),
+        np.where(df_2024['Margin_Pct'] >= -5.0, 'Lean Negative (Targetable)', 'Weakness / Opponent Safe')
     )
-    
-    pipeline = Pipeline(steps=[
-        ('preprocessor', preprocessor),
-        ('regressor', Ridge(alpha=1.0))
-    ])
-    
-    X = train_df[categorical_features + numeric_features]
-    y = train_df['Votes_Secured']
-    
-    pipeline.fit(X, y)
-    return pipeline
+)
 
-model_pipeline = train_predictive_pipeline(df_master)
+# ---------------------------------------------------------
+# Panel 1 Output
+# ---------------------------------------------------------
+if panel_selection == "Panel 1: Strategic Baseline & Demographics":
+    is_winning_base = net_margin_base > 0
+    swing_needed_base = abs(net_margin_base) / total_votes_base * 100 if total_votes_base > 0 else 0
 
-if analytical_view == "Multi-Year Demographic & Vote Analysis":
-    st.subheader("Historical Multi-Year Comparison & Demographic Breakdown")
+    if is_winning_base:
+        st.markdown(f"""
+        <div class="verdict-box verdict-win">
+            <div class="verdict-title" style="color: #15803D;">2024 BASELINE STATUS: VICTORY ({target_party})</div>
+            <div class="verdict-subtitle">
+                Lead Margin: <b>{net_margin_base:,} votes</b> (+{abs(target_share_base - lead_opp_share_base):.2f}% over {lead_opponent}) |
+                Booths Secured: <b>{booths_won_base} / {total_booths}</b> ({(booths_won_base/total_booths)*100:.1f}%)
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div class="verdict-box verdict-loss">
+            <div class="verdict-title" style="color: #B91C1C;">2024 BASELINE STATUS: DEFEAT ({target_party})</div>
+            <div class="verdict-subtitle">
+                Deficit: <b>{abs(net_margin_base):,} votes</b> behind {lead_opponent} ({lead_opp_share_base:.2f}% vs {target_share_base:.2f}%) |
+                Swing Required to Win: <b>+{swing_needed_base:.2f}%</b>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    target_segment = st.sidebar.selectbox("Select Target Segment", df_master['Segment'].unique())
-    selected_history_year = st.sidebar.selectbox("Select Historical Election Year", sorted(df_master['Year'].unique(), reverse=True))
+    st.subheader(f"Baseline Assessment: {target_party} in Varanasi (2024 Actuals)")
+    st.markdown("---")
 
-    segment_data = df_master[df_master['Segment'] == target_segment]
-    year_filtered_data = segment_data[segment_data['Year'] == selected_history_year]
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("Total Electorate", f"{total_electors_base:,}")
+    k2.metric("Total Votes Polled", f"{total_votes_base:,}")
+    k3.metric("Constituency Turnout", f"{constituency_turnout_base:.2f}%")
+    k4.metric(f"{target_party} Vote Share", f"{target_share_base:.2f}%")
+    k5.metric(f"Net Margin vs {lead_opponent}", f"{net_margin_base:+,} votes")
 
-    col_metric1, col_metric2, col_metric3 = st.columns(3)
-    total_electors = segment_data['Electors'].iloc[0]
-    booths = segment_data['Booth_Count'].iloc[0]
-    voters_per_booth = int(total_electors / booths) if booths > 0 else 0
+    st.markdown("---")
+    st.subheader("1. Assembly Segment Performance Matrix")
 
-    col_metric1.metric("Total Electorate Base", f"{total_electors:,}")
-    col_metric2.metric("Allocated Polling Booths", f"{booths}")
-    col_metric3.metric("Voters Per Booth Density", f"{voters_per_booth:,}")
+    seg_stats = df_2024.groupby('Assembly_Segment').agg(
+        Booths=('Booth_No', 'count'),
+        Electors=('Total_Electors_2024', 'sum'),
+        Votes_Polled=('Total Votes', lambda x: int(x.sum() * SCALE_FACTOR)),
+        Target_Votes=(target_party, lambda x: int(x.sum() * SCALE_FACTOR)),
+        Opponent_Votes=(lead_opponent, lambda x: int(x.sum() * SCALE_FACTOR)),
+        Margin_Votes=('Margin_Votes', lambda x: int(x.sum() * SCALE_FACTOR))
+    ).reset_index()
+
+    seg_stats['Turnout (%)'] = (seg_stats['Votes_Polled'] / seg_stats['Electors']) * 100
+    seg_stats[f'{target_party} (%)'] = seg_stats.apply(lambda row: (row['Target_Votes'] / row['Votes_Polled']) * 100 if row['Votes_Polled'] > 0 else 0, axis=1)
+    seg_stats[f'{lead_opponent} (%)'] = seg_stats.apply(lambda row: (row['Opponent_Votes'] / row['Votes_Polled']) * 100 if row['Votes_Polled'] > 0 else 0, axis=1)
+
+    col_t1, col_t2 = st.columns([1, 1])
+    with col_t1:
+        st.markdown('<div class="chart-caption">Compares vote shares of the target party vs leading opponent across each assembly zone.</div>', unsafe_allow_html=True)
+        fig_seg_bar = px.bar(
+            seg_stats, x='Assembly_Segment', y=[f'{target_party} (%)', f'{lead_opponent} (%)'],
+            barmode='group', title=f"Vote Share Comparison ({target_party} vs {lead_opponent})",
+            color_discrete_sequence=['#2563EB', '#EA580C']
+        )
+        st.plotly_chart(fig_seg_bar, use_container_width=True)
+
+    with col_t2:
+        st.markdown('<div class="chart-caption">Displays absolute net vote margin (positive or negative) per assembly constituency.</div>', unsafe_allow_html=True)
+        fig_margin_bar = px.bar(
+            seg_stats, x='Assembly_Segment', y='Margin_Votes',
+            title=f"Net Vote Margin by Assembly Segment",
+            color='Margin_Votes', color_continuous_scale=['#DC2626', '#E2E8F0', '#16A34A']
+        )
+        st.plotly_chart(fig_margin_bar, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("2. Constituency Demographics & Caste Spread")
+
+    col_d1, col_d2 = st.columns([1, 1])
+    caste_cols = [c for c in df_2024.columns if c.startswith('Caste_') and c.endswith('_2024')]
+    caste_summary = df_2024[caste_cols].mean().reset_index()
+    caste_summary.columns = ['Demographic_Group', 'Proportion']
+    caste_summary['Group'] = caste_summary['Demographic_Group'].str.replace('Caste_', '').str.replace('_mean_2024', '')
+    caste_summary['Share (%)'] = caste_summary['Proportion'] * 100
+
+    with col_d1:
+        st.markdown('<div class="chart-caption">Breakdown of demographic and caste proportions across the entire voter roll.</div>', unsafe_allow_html=True)
+        fig_caste = px.pie(
+            caste_summary, values='Share (%)', names='Group', hole=0.45,
+            title="Electorate Caste Breakdown", color_discrete_sequence=px.colors.qualitative.Safe
+        )
+        st.plotly_chart(fig_caste, use_container_width=True)
+
+    with col_d2:
+        seg_caste = df_2024.groupby('Assembly_Segment')[caste_cols].mean().reset_index()
+        seg_caste.columns = [c.replace('Caste_', '').replace('_mean_2024', '') for c in seg_caste.columns]
+        seg_caste_melted = seg_caste.melt(id_vars='Assembly_Segment', var_name='Community', value_name='Weight')
+        seg_caste_melted['Percentage'] = seg_caste_melted['Weight'] * 100
+
+        st.markdown('<div class="chart-caption">Heatmap showing concentration weights of each community per assembly zone.</div>', unsafe_allow_html=True)
+        fig_heat = px.density_heatmap(
+            seg_caste_melted, x='Assembly_Segment', y='Community', z='Percentage',
+            color_continuous_scale='Blues', title="Community Density Matrix (% per Segment)"
+        )
+        st.plotly_chart(fig_heat, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("3. Booth Classification & Strategy Targeting")
+
+    f_col1, f_col2 = st.columns(2)
+    with f_col1:
+        sel_ac = st.selectbox("Assembly Segment Filter", ["All"] + list(df_2024['Assembly_Segment'].unique()))
+    with f_col2:
+        sel_cat = st.selectbox("Booth Category Filter", ["All"] + list(df_2024['Booth_Category'].unique()))
+
+    df_view = df_2024.copy()
+    if sel_ac != "All": df_view = df_view[df_view['Assembly_Segment'] == sel_ac]
+    if sel_cat != "All": df_view = df_view[df_view['Booth_Category'] == sel_cat]
+
+    display_cols = ['Assembly_Segment', 'Booth_No', 'Total Votes', 'Turnout_Percentage', f'{target_party}_Vote_Share', 'Margin_Pct', 'Booth_Category']
+    st.dataframe(df_view[display_cols].sort_values(by='Margin_Pct', ascending=True), use_container_width=True, hide_index=True)
+
+# ---------------------------------------------------------
+# Panel 2 Output
+# ---------------------------------------------------------
+elif panel_selection == "Panel 2: 2029 Predictive Scenario Engine":
+    st.sidebar.subheader("1. Macro Turnout Adjustments")
+    sim_turnout_delta = st.sidebar.slider("Uniform Turnout Shift (%)", -15.0, 15.0, 0.0, 0.5) / 100.0
+
+    st.sidebar.subheader("2. Differential Demographic Mobilization")
+    yadav_factor = st.sidebar.slider("OBC Yadav Mobilization", 0.60, 1.40, 1.0, 0.05)
+    patel_factor = st.sidebar.slider("OBC Patel/Kurmi Mobilization", 0.60, 1.40, 1.0, 0.05)
+    muslim_factor = st.sidebar.slider("Muslim Mobilization", 0.60, 1.40, 1.0, 0.05)
+    brahmin_factor = st.sidebar.slider("Brahmin Mobilization", 0.60, 1.40, 1.0, 0.05)
+    dalit_factor = st.sidebar.slider("SC Dalit Mobilization", 0.60, 1.40, 1.0, 0.05)
+
+    st.sidebar.subheader("3. Direct Partisan Swings")
+    target_swing = st.sidebar.slider(f"{target_party} Swing (%)", -15.0, 15.0, 0.0, 0.5) / 100.0
+    opp_swing = st.sidebar.slider(f"{lead_opponent} Swing (%)", -15.0, 15.0, 0.0, 0.5) / 100.0
+
+    X_sim = df_2024[train_features].copy()
+    for col in X_sim.columns:
+        if 'OBC_Yadav' in col: X_sim[col] = (X_sim[col] * yadav_factor).clip(0, 1)
+        elif 'OBC_Patel' in col: X_sim[col] = (X_sim[col] * patel_factor).clip(0, 1)
+        elif 'Muslim' in col: X_sim[col] = (X_sim[col] * muslim_factor).clip(0, 1)
+        elif 'Brahmin' in col: X_sim[col] = (X_sim[col] * brahmin_factor).clip(0, 1)
+        elif 'SC_Dalit' in col: X_sim[col] = (X_sim[col] * dalit_factor).clip(0, 1)
+
+    c_cols = [c for c in X_sim.columns if 'Caste_' in c]
+    X_sim[c_cols] = X_sim[c_cols].div(X_sim[c_cols].sum(axis=1), axis=0)
+
+    sim_turnout = turnout_model.predict(X_sim) + sim_turnout_delta
+    sim_turnout = np.clip(sim_turnout, 0.05, 0.95)
+
+    raw_preds = np.zeros((len(X_sim), len(model_payload['all_parties'])))
+    for idx, party in enumerate(model_payload['all_parties']):
+        pred = party_models[party].predict(X_sim)
+        if party == target_party: pred += target_swing
+        elif party == lead_opponent: pred += opp_swing
+        raw_preds[:, idx] = pred
+
+    sim_shares = softmax(raw_preds)
+
+    df_sim = df_2024[['Assembly_Segment', 'Booth_No', 'Total_Electors_2024']].copy()
+    df_sim['Sim_Total_Votes'] = (df_sim['Total_Electors_2024'] * sim_turnout * SCALE_FACTOR).round().astype(int)
+
+    for idx, party in enumerate(model_payload['all_parties']):
+        p_name = model_payload['all_parties'][idx]
+        if p_name in modeled_parties:
+            df_sim[f'Sim_{p_name}_Share'] = sim_shares[:, idx]
+
+    share_cols_sim = [f'Sim_{p}_Share' for p in modeled_parties]
+    sum_shares = df_sim[share_cols_sim].sum(axis=1)
+    for col in share_cols_sim:
+        df_sim[col] = df_sim[col] / sum_shares
+
+    for party in modeled_parties:
+        df_sim[f'Sim_{party}_Votes'] = (df_sim['Sim_Total_Votes'] * df_sim[f'Sim_{party}_Share']).round().astype(int)
+
+    total_sim_polled = df_sim['Sim_Total_Votes'].sum()
+    sim_target_votes = df_sim[f'Sim_{target_party}_Votes'].sum()
+    sim_target_share = (sim_target_votes / total_sim_polled) * 100 if total_sim_polled > 0 else 0
+
+    sim_opp_votes = df_sim[f'Sim_{lead_opponent}_Votes'].sum()
+    sim_opp_share = (sim_opp_votes / total_sim_polled) * 100 if total_sim_polled > 0 else 0
+    sim_net_margin = sim_target_votes - sim_opp_votes
+
+    sim_party_cols = [f'Sim_{p}_Votes' for p in modeled_parties]
+    df_sim['Sim_Winner'] = df_sim[sim_party_cols].idxmax(axis=1).str.replace('Sim_', '').str.replace('_Votes', '')
+    sim_booths_won = int((df_sim['Sim_Winner'] == target_party).sum())
+
+    is_winning_sim = sim_net_margin > 0
+    if is_winning_sim:
+        st.markdown(f"""
+        <div class="verdict-box verdict-win">
+            <div class="verdict-title" style="color: #15803D;">2029 PROJECTION: VICTORY PROJECTED ({target_party})</div>
+            <div class="verdict-subtitle">
+                Projected Margin: <b>+{sim_net_margin:,} votes</b> over {lead_opponent} |
+                Projected Vote Share: <b>{sim_target_share:.2f}%</b> |
+                Booths Won: <b>{sim_booths_won} / {total_booths}</b> ({(sim_booths_won/total_booths)*100:.1f}%)
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div class="verdict-box verdict-loss">
+            <div class="verdict-title" style="color: #B91C1C;">2029 PROJECTION: DEFEAT PROJECTED ({target_party})</div>
+            <div class="verdict-subtitle">
+                Projected Deficit: <b>{sim_net_margin:,} votes</b> behind {lead_opponent} |
+                Projected Vote Share: <b>{sim_target_share:.2f}%</b> |
+                Booths Won: <b>{sim_booths_won} / {total_booths}</b> ({(sim_booths_won/total_booths)*100:.1f}%)
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.subheader(f"2029 Lok Sabha Predictive Simulation: {target_party}")
+    st.markdown("---")
+
+    fc1, fc2, fc3, fc4 = st.columns(4)
+    fc1.metric("2029 Projected Polled Votes", f"{total_sim_polled:,}", f"{total_sim_polled - total_votes_base:+,} vs 2024")
+    fc2.metric(f"Projected {target_party} Share", f"{sim_target_share:.2f}%", f"{sim_target_share - target_share_base:+,.2f}%")
+    fc3.metric(f"Projected Margin vs {lead_opponent}", f"{sim_net_margin:+,} votes", f"{sim_net_margin - net_margin_base:+,}")
+    fc4.metric("Simulated Booths Won", f"{sim_booths_won} / {total_booths}", f"{sim_booths_won - booths_won_base:+} booths")
 
     st.markdown("---")
 
-    col_left, col_right = st.columns(2)
+    col_sc1, col_sc2 = st.columns(2)
+    with col_sc1:
+        st.markdown('<div class="chart-caption">Compares actual 2024 constituency vote shares against the projected 2029 simulation outcomes.</div>', unsafe_allow_html=True)
+        comp_summary = pd.DataFrame({
+            'Party': [target_party, lead_opponent],
+            'Baseline 2024 (%)': [target_share_base, lead_opp_share_base],
+            'Projected 2029 Scenario (%)': [sim_target_share, sim_opp_share]
+        })
+        fig_comp = go.Figure(data=[
+            go.Bar(name='Baseline 2024', x=comp_summary['Party'], y=comp_summary['Baseline 2024 (%)'], marker_color='#94A3B8'),
+            go.Bar(name='Projected 2029 Scenario', x=comp_summary['Party'], y=comp_summary['Projected 2029 Scenario (%)'], marker_color='#2563EB')
+        ])
+        fig_comp.update_layout(barmode='group', yaxis_title="Vote Share (%)")
+        st.plotly_chart(fig_comp, use_container_width=True)
 
-    with col_left:
-        st.markdown(f"#### Party Performance in {selected_history_year} ({target_segment})")
-        if not year_filtered_data.empty:
-            st.dataframe(year_filtered_data[['Party', 'Votes_Secured', 'Campaign_Spend_Lakhs', 'Rally_Count']], hide_index=True, use_container_width=True)
+    with col_sc2:
+        st.markdown('<div class="chart-caption">Shows projected vote margins across all assembly segments for the 2029 election.</div>', unsafe_allow_html=True)
+        seg_sim = df_sim.groupby('Assembly_Segment')[[f'Sim_{target_party}_Votes', f'Sim_{lead_opponent}_Votes']].sum().reset_index()
+        seg_sim['Sim_Margin'] = seg_sim[f'Sim_{target_party}_Votes'] - seg_sim[f'Sim_{lead_opponent}_Votes']
 
-            bar_fig = px.bar(year_filtered_data, x='Party', y='Votes_Secured', color='Party', title=f"Votes Secured by Party ({selected_history_year})")
-            st.plotly_chart(bar_fig, use_container_width=True)
-        else:
-            st.warning("No record found for this specific year and segment combination.")
-
-    with col_right:
-        st.markdown(f"#### Caste and Community Distribution ({target_segment})")
-        demo_df = segment_data[['OBC_Share', 'SC_Share', 'Muslim_Share', 'General_Share']].drop_duplicates()
-        if not demo_df.empty:
-            demo_melted = demo_df.melt(var_name='Community', value_name='Share (%)')
-            color_map = {'OBC_Share': '#F59E0B', 'SC_Share': '#3B82F6', 'Muslim_Share': '#10B981', 'General_Share': '#6366F1'}
-
-            pie_fig = px.pie(demo_melted, values='Share (%)', names='Community', color='Community', color_discrete_map=color_map, hole=0.4)
-            pie_fig.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(pie_fig, use_container_width=True)
-
-    st.markdown("---")
-    st.markdown("#### Multi-Year Trend Analysis Across Cycles (2014 - 2024)")
-    trend_fig = px.line(segment_data, x='Year', y='Votes_Secured', color='Party', markers=True, title=f"Vote Trajectory Across Years in {target_segment}")
-    st.plotly_chart(trend_fig, use_container_width=True)
-
-elif analytical_view == "War Room Strategy & Simulation":
-    st.subheader("Advanced Political Consultant War Room")
-
-    forecast_year = st.sidebar.selectbox("Target Forecast Year", [2029, 2034, 2039])
-    consulting_party = st.sidebar.selectbox("Select Client Party", df_master['Party'].unique())
-    target_segment = st.sidebar.selectbox("Select Target Segment", df_master['Segment'].unique())
-
-    st.markdown(f"**Advising Portfolio: {consulting_party} | Target Region: {target_segment} | Projection Cycle: {forecast_year}**")
-
-    st.markdown("#### Strategic Caste & Community Mobilization Focus Checkboxes")
-    col_cb1, col_cb2, col_cb3, col_cb4 = st.columns(4)
-    focus_obc = col_cb1.checkbox("Focus OBC Block", value=True)
-    focus_sc = col_cb2.checkbox("Focus SC Block", value=False)
-    focus_muslim = col_cb3.checkbox("Focus Muslim Block", value=False)
-    focus_general = col_cb4.checkbox("Focus General Block", value=False)
+        fig_sim_seg = px.bar(
+            seg_sim, x='Assembly_Segment', y='Sim_Margin',
+            title=f"Projected 2029 Net Margin ({target_party} vs {lead_opponent})",
+            color='Sim_Margin', color_continuous_scale=['#DC2626', '#E2E8F0', '#16A34A']
+        )
+        st.plotly_chart(fig_sim_seg, use_container_width=True)
 
     st.markdown("---")
-    col_sim1, col_sim2, col_sim3 = st.columns(3)
-    with col_sim1:
-        new_spend = st.slider("Campaign Budget Allocation (Lakhs)", min_value=10, max_value=250, value=85)
-    with col_sim2:
-        new_rallies = st.slider("Targeted Ground Rallies", min_value=1, max_value=120, value=12)
-    with col_sim3:
-        female_focus_boost = st.slider("Women Voter Outreach Intensity (%)", min_value=1, max_value=50, value=15)
+    st.subheader(f"Booth Flipping & Targetability Matrix ({target_party})")
 
-    if st.button("Execute War Room Simulation"):
-        sim_records = []
-        seg_data_recent = df_master[(df_master['Segment'] == target_segment) & (df_master['Year'] == 2024)]
-        growth_multiplier = 1.05 if forecast_year == 2029 else (1.10 if forecast_year == 2034 else 1.15)
+    df_sim['Base_Winner'] = df_2024['Base_Winner']
+    df_sim['Target_Gain'] = (df_sim['Base_Winner'] != target_party) & (df_sim['Sim_Winner'] == target_party)
+    df_sim['Target_Loss'] = (df_sim['Base_Winner'] == target_party) & (df_sim['Sim_Winner'] != target_party)
 
-        for _, row in seg_data_recent.iterrows():
-            rec = row.to_dict()
-            party_name = row['Party']
-            rec['Year'] = forecast_year
-            rec['Electors'] = int(row['Electors'] * growth_multiplier)
-
-            if party_name == consulting_party:
-                rec['Campaign_Spend_Lakhs'] = new_spend
-                rec['Rally_Count'] = new_rallies
-                rec['Female_Turnout'] = min(75.0, row['Female_Turnout'] + (female_focus_boost * 0.2))
-
-            # Prepare feature input DataFrame
-            input_features = pd.DataFrame([{
-                'Party': party_name,
-                'Segment': target_segment,
-                'Year': forecast_year,
-                'Electors': rec['Electors'],
-                'Campaign_Spend_Lakhs': rec['Campaign_Spend_Lakhs'],
-                'Rally_Count': rec['Rally_Count'],
-                'OBC_Share': rec['OBC_Share'],
-                'SC_Share': rec['SC_Share'],
-                'Muslim_Share': rec['Muslim_Share'],
-                'General_Share': rec['General_Share'],
-                'Female_Turnout': rec['Female_Turnout'],
-                'Booth_Count': rec['Booth_Count']
-            }])
-
-            # Get raw ML prediction from pipeline
-            raw_ml_prediction = model_pipeline.predict(input_features)[0]
-
-            if party_name == consulting_party:
-                caste_multiplier = 1.0
-                if focus_obc: caste_multiplier += (row['OBC_Share'] / 100.0) * 0.06
-                if focus_sc: caste_multiplier += (row['SC_Share'] / 100.0) * 0.06
-                if focus_muslim: caste_multiplier += (row['Muslim_Share'] / 100.0) * 0.06
-                if focus_general: caste_multiplier += (row['General_Share'] / 100.0) * 0.06
-
-                final_votes = raw_ml_prediction * caste_multiplier
-                rec['Simulated_Votes'] = int(max(1000, final_votes))
-            else:
-                rec['Simulated_Votes'] = int(max(1000, raw_ml_prediction))
-
-            sim_records.append(rec)
-
-        df_sim = pd.DataFrame(sim_records)
-        df_sim = df_sim.sort_values(by='Simulated_Votes', ascending=False)
-
-        st.markdown("---")
-        st.markdown(f"#### Simulated Electoral Outcome for {forecast_year}")
-        display_columns = ['Party', 'Simulated_Votes', 'Electors', 'Campaign_Spend_Lakhs', 'Rally_Count', 'Female_Turnout', 'OBC_Share', 'SC_Share', 'Muslim_Share', 'General_Share']
-        st.dataframe(df_sim[display_columns], hide_index=True, use_container_width=True)
-
-        chart = alt.Chart(df_sim).mark_bar().encode(
-            x=alt.X('Party:N', sort='-y'),
-            y='Simulated_Votes:Q',
-            color=alt.condition(alt.datum.Party == consulting_party, alt.value('#F59E0B'), alt.value('#374151'))
-        ).properties(height=300)
-        st.altair_chart(chart, use_container_width=True)
+    col_fl1, col_fl2 = st.columns(2)
+    with col_fl1:
+        st.markdown(f"**Booths Gained by {target_party} (`{df_sim['Target_Gain'].sum()}` booths)**")
+        st.dataframe(df_sim[df_sim['Target_Gain']][['Assembly_Segment', 'Booth_No', 'Base_Winner', 'Sim_Winner']], hide_index=True, use_container_width=True)
+    with col_fl2:
+        st.markdown(f"**Booths Lost by {target_party} (`{df_sim['Target_Loss'].sum()}` booths)**")
+        st.dataframe(df_sim[df_sim['Target_Loss']][['Assembly_Segment', 'Booth_No', 'Base_Winner', 'Sim_Winner']], hide_index=True, use_container_width=True)
