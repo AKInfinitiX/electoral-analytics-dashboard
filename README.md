@@ -1,4 +1,4 @@
-# Political Strategy Dashboard 
+# Political Strategy Dashboard (Varanasi)
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-red.svg)](https://streamlit.io/)
