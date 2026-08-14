@@ -1,170 +1,163 @@
-# Electoral Intelligence & Strategic Campaign Portal
+# Varanasi Strategic Intelligence Advisory
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-red.svg)](https://streamlit.io/)
-[![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-1.3%2B-orange.svg)](https://scikit-learn.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An end-to-end Machine Learning web application and strategic intelligence platform designed for political consultants, data scientists, and campaign strategists. The platform provides capabilities for multi-cycle voter demographic analysis, constituency-level booth density metrics, and Machine Learning war-room simulations for future election cycles (2029–2039).
-
-**Notice:** To ensure a frictionless, zero-setup experience for evaluators, this project is optimized to run exclusively via **Google Colab**.
+A Streamlit-based electoral intelligence dashboard for the Varanasi constituency, built for campaign strategists and political data analysts. The app combines 2024 actuals with a pre-trained model bundle to power two panels: a baseline diagnostic view and a 2029 predictive scenario engine.
 
 ---
 
 ## Core Capabilities
 
-- **Multi-Year Electoral Tracking:** Monitor vote trajectories, turnout statistics, and party performance across historical election cycles (2014, 2019, 2024).
-- **Demographic & Community Breakdown:** Analyze caste and community distributions (OBC, SC, Muslim, General) across key assembly segments via interactive visual charts.
-- **Spatial & Booth Density Metrics:** Evaluate electorate bases, total allocated polling booths, and voter-per-booth density parameters.
-- **War Room Strategy & Simulation Engine:** Model future electoral outcomes (2029, 2034, 2039) using real-time parameter tuning for campaign budget allocations, ground rallies, women voter outreach intensity, and targeted community mobilization strategies.
+- **Strategic Baseline & Demographics (Panel 1):** 2024 win/loss verdict, constituency-level KPIs (electorate, turnout, vote share, margin), assembly-segment vote share and margin comparisons, caste/community distribution (pie + heatmap), and a filterable, sortable booth classification table (Stronghold / Safe / Vulnerable / Targetable / Opponent Safe).
+- **2029 Predictive Scenario Engine (Panel 2):** Live "what-if" simulation with sliders for:
+  - Uniform turnout shift
+  - Differential demographic mobilization (OBC Yadav, OBC Patel/Kurmi, Muslim, Brahmin, SC Dalit)
+  - Direct partisan swing for the target party and leading opponent
+
+  Outputs a live-updating 2029 verdict, projected KPIs vs. 2024 baseline, comparison charts, projected margin-by-segment chart, and a booth flip matrix (gained/lost booths).
 
 ---
 
-## Machine Learning Architecture & Methodology
+## How It Works
 
-- **Model Pipeline:** Scikit-learn `Pipeline` utilizing regularized **Ridge Regression** (L2 Regularization) to handle tabular data with categorical and numeric feature interactions.
-- **Preprocessing Infrastructure:**
-  - **Categorical Encoding:** `OneHotEncoder` applied to political party affiliations (`Party`) and assembly segments (`Segment`) to establish explicit, unbiased baseline intercepts for each contestant.
-  - **Feature Scaling:** `StandardScaler` applied to campaign spending, ground rallies, turnout percentages, booth counts, and demographic shares.
-- **Why Ridge Regression over Decision Trees?**
-  - Decision tree models (e.g., LightGBM, Random Forest) use step-function split thresholds that flatline or clip predictions when sliders exceed historical bounds, or output artificial ties on small sample sizes.
-  - Ridge Regression provides **smooth, continuous scaling**, ensuring that tweaking campaign expenditure or rally counts yields mathematically consistent, proportional vote adjustments.
+- `app.py` loads three artifacts at startup: the 2024 actuals CSV, the 2019 backcast CSV, and a `joblib` bundle (`turnout_model`, per-party `party_models`, `train_features`, `all_parties`) — all of which live in the repo root.
+- Panel 1 computes baseline stats directly from the 2024 CSV.
+- Panel 2 rebuilds the feature matrix by applying the mobilization sliders to caste-share features, re-normalizes caste shares to sum to 1, re-predicts turnout and per-party vote logits (adding the swing sliders to the target/opponent logits), and converts the result to shares via softmax.
+- A `SCALE_FACTOR` constant (`5.15`) is applied when aggregating vote/turnout totals from the source CSVs to approximate full constituency-level counts.
 
----
-
-## Model Validation & Performance Metrics
-
-The predictive model was evaluated across historical election records and bootstrapped validation datasets to verify generalizability and prevent overfitting.
-
-| Evaluation Metric | Baseline Model | Synthetic Augmented (Booth Simulation) | Expected Real-World Target |
-| :--- | :---: | :---: | :---: |
-| **R² Score (Variance Explained)** | `0.8420` | `0.7950` | `0.7500 – 0.8500` |
-| **Mean Absolute Percentage Error (MAPE)** | `8.2%` | `11.4%` | `10.0% – 15.0%` |
-| **Model Empirical Accuracy** | **91.8%** | **88.6%** | **80.0% – 85.0%** |
-
-### Anti-Overfitting & Anti-Bias Safeguards
-
-- **Overfitting Prevention:** High-depth unconstrained decision trees on small sample sizes yielded artificial scores (R² > 0.99), indicating training set memorization. Implementing **Ridge Regularization** brings accuracy down to a production-ready **~88%**, capturing baseline trends without memorizing noise.
-- **Bootstrapped Data Augmentation:** The testing framework includes a synthetic data generator script (`data_generator.ipynb`) that injects +/- 15% random variance to simulate polling-booth level variance (~5,000+ rows).
-
----
-
-## Technical Stack
-
-- **Language:** Python 3.8+
-- **Environment:** Google Colab (Cloud Execution)
-- **Frontend Framework:** Streamlit
-- **Machine Learning:** Scikit-learn (`Ridge`, `Pipeline`, `ColumnTransformer`, `OneHotEncoder`, `StandardScaler`)
-- **Data Processing:** Pandas, NumPy
-- **Visualization:** Plotly Express, Altair
+> **Note:** This repository does not include the model-training notebook. `model_performance_metrics.csv` holds the recorded validation figures, but the training pipeline itself (feature engineering, model type, hyperparameters) isn't part of `app.py` — treat the `joblib` bundle as a black box unless you also have the training notebook.
 
 ---
 
 ## Repository Structure
 
 ```text
-electoral-analytics-dashboard/
+strategic-election-dashboard/
 │
-├── app.py                   # Main application interface and ML pipeline logic
-├── requirements.txt         # Python package dependencies
-├── data_generator.ipynb     # Colab notebook for validation & synthetic data
-├── .gitignore                # Excluded cache artifacts and virtual environments
-├── LICENSE                   # MIT open-source license terms
-└── README.md                 # Technical documentation
+├── app.py                              # Main Streamlit application
+├── requirements.txt                    # Python package dependencies
+├── model_performance_metrics.csv       # Recorded model validation metrics
+├── trained_election_models.joblib      # Serialized model bundle (turnout + per-party models)
+├── Varanasi_Election_2024_Actuals.csv  # 2024 baseline data and engineered booth features
+├── Varanasi_Election_2019_Backcast.csv # 2019 historical backcast dataset
+├── .gitignore
+├── LICENSE
+└── README.md
 ```
+
+`app.py` loads all its data/model files from the **same directory it runs in** (`DATA_PATH = "./"`). Since the CSVs and the `.joblib` file are already committed to this repo, cloning it is enough — **no manual file upload is required**, in Colab or locally.
 
 ---
 
-## Execution Guide: Run via Google Colab
+## Installation & Usage — Local
 
-This platform is executed directly from Google Colab using LocalTunnel to expose the Streamlit port publicly. A built-in file picker allows you to upload custom CSV datasets directly into the environment.
+### Prerequisites
+- Python 3.8+
+- pip
 
-### Step 1: Set Up the Notebook
+### Steps
 
-1. Go to [Google Colab](https://colab.research.google.com/) and create a New Notebook.
-2. Copy and paste the complete code block below into a single code cell and run it.
+```bash
+# 1. Clone the repository
+git clone https://github.com/AKInfinitiX/strategic-election-dashboard.git
+cd strategic-election-dashboard
+
+# 2. (Recommended) Create a virtual environment
+python -m venv venv
+source venv/bin/activate      # macOS/Linux
+venv\Scripts\activate         # Windows
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Run the app
+streamlit run app.py
+```
+
+Streamlit will start a local server and print a URL (typically `http://localhost:8501`) — open it in your browser. All required data files are already in the cloned repo, so the app should load without any extra setup.
+
+---
+
+## Installation & Usage — Google Colab
+
+Colab has no direct way to open a localhost port in your browser, so this uses a Cloudflare Tunnel to expose the Streamlit port publicly.
+
+### Step 1: Set up the notebook
+Open a new [Google Colab](https://colab.research.google.com/) notebook and run the following in a single cell:
 
 ```python
 # 1. Clone the repository
-!git clone https://github.com/AKInfinitiX/electoral-analytics-dashboard.git
+!git clone https://github.com/AKInfinitiX/strategic-election-dashboard.git
 
 # 2. Enter the repository directory
-%cd /content/electoral-analytics-dashboard
+%cd strategic-election-dashboard
 
-# 3. Import tools and install required dependencies
-import urllib.request
-import time
-import subprocess
-!pip install -q streamlit pandas numpy scikit-learn altair plotly
+# 3. Install dependencies
+!pip install -q streamlit pandas numpy plotly joblib scikit-learn
 
-# 4. Upload your custom dataset via browser file picker
-from google.colab import files
-import pandas as pd
-
-print("Please upload your constituency data CSV:")
-uploaded = files.upload()
-
-for filename in uploaded.keys():
-    print(f"File uploaded successfully: {filename}")
-    # Read the file into pandas
-    df_custom = pd.read_csv(filename)
-    # Save it with a standard name so the Streamlit app can access it
-    df_custom.to_csv("varanasi_voters_custom.csv", index=False)
-
-# 5. Terminate any active old processes
+# 4. Terminate any old running processes
 !pkill -f streamlit
-!pkill -f localtunnel
+!pkill -f cloudflared
 
-# 6. Fetch and display the LocalTunnel Password (Colab Public IP)
-try:
-    ip = urllib.request.urlopen('https://ipv4.icanhazip.com').read().decode('utf8').strip()
-    print("-------------------------------------------------------------------")
-    print(f"PASSWORD IS: {ip}")
-    print("-------------------------------------------------------------------")
-except Exception:
-    pass
+# 5. Download Cloudflare's tunnel binary
+!wget -q -nc -O cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+!chmod +x cloudflared
 
-# 7. Launch Streamlit app in background
+# 6. Launch Streamlit in the background
+import subprocess, time
 subprocess.Popen([
     "streamlit", "run", "app.py",
     "--server.port", "8501",
-    "--server.headless", "true",
-    "--server.enableCORS", "false",
-    "--server.enableXsrfProtection", "false"
+    "--server.address", "127.0.0.1",
+    "--server.headless", "true"
 ])
 
-# 8. Start public LocalTunnel
-time.sleep(5)
-print("Starting tunnel below...\n")
-!npx -y localtunnel --port 8501
+# Wait for the server to initialize
+time.sleep(6)
+
+# 7. Start the public Cloudflare tunnel
+print("\n=== YOUR DASHBOARD IS LIVE ===")
+print("Click the URL below that ends in '.trycloudflare.com'")
+print("===============================\n")
+
+!./cloudflared tunnel --url http://127.0.0.1:8501
 ```
 
-### Step 2: Access the Application
+### Step 2: Access the app
+Click the generated `*.trycloudflare.com` URL printed at the bottom of the cell output.
 
-1. Copy the IP address printed under `PASSWORD IS: ...`.
-2. Click the generated `loca.lt` URL output at the bottom of the cell.
-3. Paste the IP address into the LocalTunnel password prompt on the webpage and click **Submit**.
+> **No file upload step needed.** Since `Varanasi_Election_2024_Actuals.csv`, `Varanasi_Election_2019_Backcast.csv`, and `trained_election_models.joblib` are already committed to this repo, `git clone` pulls them automatically. Just make sure you `%cd` into `strategic-election-dashboard` before launching Streamlit, since `app.py` reads its data files from `./` (the current working directory).
 
 ---
 
 ## Operational Guide
 
-- **Module Selection:** Use the sidebar radio buttons to toggle between **Multi-Year Demographic & Vote Analysis** and **War Room Strategy & Simulation**.
-- **Multi-Year Analysis View:**
-  - Filter by target assembly segment and historical election year.
-  - View total electorate sizes, booth allocations, and party vote distributions via Plotly bar charts and community pie charts.
-- **War Room Strategy & Simulation View:**
-  - Select target forecast year (2029, 2034, 2039), client political party, and target constituency segment.
-  - Toggle caste mobilization checkboxes (OBC, SC, Muslim, General) to simulate micro-targeting focus.
-  - Adjust sliders for Campaign Budget Allocation (Lakhs), Targeted Ground Rallies, and Women Voter Outreach Intensity (%).
-  - Click **Execute War Room Simulation** to generate simulated vote totals and Altair outcome charts.
+**Sidebar (always visible):**
+- **Select Target / Client Party** — the party the whole dashboard is analyzed from the perspective of.
+- **Analytical Modules** — switch between Panel 1 and Panel 2.
+
+**Panel 1 — Strategic Baseline & Demographics:**
+- Verdict banner (2024 win/loss vs. the leading opponent)
+- KPI row: electorate, votes polled, turnout, target party vote share, net margin
+- Assembly segment vote-share comparison and margin bar charts
+- Caste/demographic pie chart and per-segment density heatmap
+- Filterable booth-level table with segment and category filters
+
+**Panel 2 — 2029 Predictive Scenario Engine:**
+- Adjust turnout shift, demographic mobilization sliders, and partisan swing sliders in the sidebar — all charts and metrics update live
+- Verdict banner (2029 projected win/loss)
+- KPI row comparing projected vs. 2024 baseline
+- Vote-share comparison chart (2024 vs. projected) and projected margin-by-segment chart
+- Booth flip matrix: booths gained and booths lost by the target party under the simulated scenario
 
 ---
 
 ## Author & Acknowledgments
 
-- **Author:** Akshat Raj Patel (AKInfinitiX)
-- **Institution:** Indian Institute of Technology (BHU), Varanasi
+**Author:** Akshat Raj Patel (AKInfinitiX)
+**Institution:** Indian Institute of Technology (BHU), Varanasi
 
 ## License
 
